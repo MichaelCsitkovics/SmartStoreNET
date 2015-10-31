@@ -5,6 +5,7 @@ using SmartStore.Core.Domain.Common;
 using SmartStore.Services;
 using SmartStore.Web.Framework.Controllers;
 using SmartStore.Web.Framework.WebApi;
+using SmartStore.Web.Framework.WebApi.Caching;
 using SmartStore.WebApi.Models;
 using SmartStore.WebApi.Security;
 using SmartStore.WebApi.Services;
@@ -85,7 +86,7 @@ namespace SmartStore.WebApi.Controllers
 			model.Copy(_webApiSettings, false);
 			_services.Settings.SaveSetting(_webApiSettings);
 
-			WebApiCaching.Remove(WebApiControllingCacheData.Key);
+			WebApiCachingControllingData.Remove();
 
 			return Configure();
 		}
@@ -94,7 +95,7 @@ namespace SmartStore.WebApi.Controllers
 		public ActionResult GridUserData(GridCommand command)
 		{
 			if (!HasPermission())
-				return new JsonResult { Data = new GridModel<WebApiUserModel>()	{ Data = new List<WebApiUserModel>() }};
+				return new JsonResult { Data = new GridModel<WebApiUserModel> { Data = new List<WebApiUserModel>() }};
 
 			var model = _webApiPluginService.GetGridModel(command.Page - 1, command.PageSize);
 

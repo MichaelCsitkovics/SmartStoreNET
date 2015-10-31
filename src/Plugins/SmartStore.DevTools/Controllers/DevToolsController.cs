@@ -4,6 +4,7 @@ using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using SmartStore.Core;
+using SmartStore.DevTools.Models;
 using SmartStore.Services;
 using SmartStore.Services.Configuration;
 using SmartStore.Services.Stores;
@@ -71,5 +72,30 @@ namespace SmartStore.DevTools.Controllers
 			return View();
 		}
 
+        public ActionResult WidgetZone(string widgetZone)
+        {
+            var storeScope = this.GetActiveStoreScopeConfiguration(_storeService, _workContext);
+            var settings = _settingService.LoadSetting<ProfilerSettings>(storeScope);
+
+            if (settings.DisplayWidgetZones)
+            { 
+                ViewData["widgetZone"] = widgetZone;
+
+                return View();
+            }
+
+            return new EmptyResult();
+        }
+
+		[AdminAuthorize]
+		public ActionResult BackendExtension()
+		{
+			var model = new BackendExtensionModel
+			{
+				Welcome = "Hello world!"
+			};
+
+			return View(model);
+		}
 	}
 }

@@ -20,14 +20,18 @@ namespace SmartStore
 			}
 			catch { }
 		}
-		public static string ToAllMessages(this Exception exc)
+
+		public static string ToAllMessages(this Exception exception)
 		{
 			var sb = new StringBuilder();
 
-			while (exc != null)
+			while (exception != null)
 			{
-				sb.Grow(exc.Message, " ");
-				exc = exc.InnerException;
+				if (!sb.ToString().EmptyNull().Contains(exception.Message))
+				{
+					sb.Grow(exception.Message, " * ");
+				}
+				exception = exception.InnerException;
 			}
 			return sb.ToString();
 		}
@@ -36,6 +40,7 @@ namespace SmartStore
         {
 			return "{0:0.0}".FormatWith(TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds).TotalMinutes);
 		}
+
 		public static string ToElapsedSeconds(this Stopwatch watch) 
         {
 			return "{0:0.0}".FormatWith(TimeSpan.FromMilliseconds(watch.ElapsedMilliseconds).TotalSeconds);
@@ -46,6 +51,7 @@ namespace SmartStore
 			dv.RowFilter = "ColumnName='" + columnName + "'";
 			return dv.Count > 0;
 		}
+
 		public static string GetDataType(this DataTable dt, string columnName) 
         {
 			dt.DefaultView.RowFilter = "ColumnName='" + columnName + "'";
@@ -75,6 +81,7 @@ namespace SmartStore
 			}
 			return null;
 		}
+
 		public static bool IsEqual(this TypeConverter converter, string value, object compareWith) 
         {
 			object convertedObject = converter.SafeConvert(value);
@@ -110,17 +117,13 @@ namespace SmartStore
 
 		public static T GetMergedDataValue<T>(this IMergedData mergedData, string key, T defaultValue)
 		{
-			try
+			if (mergedData.MergedDataValues != null && !mergedData.MergedDataIgnore)
 			{
-				if (mergedData.MergedDataValues != null && !mergedData.MergedDataIgnore)
-				{
-					object value;
+				object value;
 
-					if (mergedData.MergedDataValues.TryGetValue(key, out value))
-						return (T)value;
-				}
+				if (mergedData.MergedDataValues.TryGetValue(key, out value))
+					return (T)value;
 			}
-			catch (Exception) { }
 
 			return defaultValue;
 		}

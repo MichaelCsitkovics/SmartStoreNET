@@ -21,8 +21,15 @@ namespace SmartStore.Services.Catalog
         /// <summary>
         /// Gets specification attributes
         /// </summary>
-        /// <returns>Specification attributes</returns>
+		/// <returns>Specification attribute query</returns>
         IQueryable<SpecificationAttribute> GetSpecificationAttributes();
+
+		/// <summary>
+		/// Gets specification attributes by identifier
+		/// </summary>
+		/// <param name="ids">Identifiers</param>
+		/// <returns>Specification attribute query</returns>
+		IQueryable<SpecificationAttribute> GetSpecificationAttributesByIds(int[] ids);
 
         /// <summary>
         /// Deletes a specification attribute
@@ -124,7 +131,6 @@ namespace SmartStore.Services.Catalog
         /// <param name="productSpecificationAttribute">Product specification attribute mapping</param>
         void UpdateProductSpecificationAttribute(ProductSpecificationAttribute productSpecificationAttribute);
 
-		/// <remarks>codehint: sm-add</remarks>
 		void UpdateProductSpecificationMapping(int specificationAttributeId, string field, bool value);
 
         #endregion

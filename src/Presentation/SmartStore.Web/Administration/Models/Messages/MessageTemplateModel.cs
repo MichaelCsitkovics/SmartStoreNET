@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Web.Mvc;
 using System.Web.Script.Serialization;
 using FluentValidation.Attributes;
@@ -43,12 +42,24 @@ namespace SmartStore.Admin.Models.Messages
         [AllowHtml]
         public string Body { get; set; }
 
-        [SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.IsActive")]
+        [SmartResourceDisplayName("Common.Active")]
         [AllowHtml]
         public bool IsActive { get; set; }
 
         [SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.EmailAccount")]
         public int EmailAccountId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.SendManually")]
+		public bool SendManually { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment1FileId")]
+		public int? Attachment1FileId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment2FileId")]
+		public int? Attachment2FileId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment3FileId")]
+		public int? Attachment3FileId { get; set; }
 
 		//Store mapping
 		[SmartResourceDisplayName("Admin.Common.Store.LimitedTo")]
@@ -59,7 +70,6 @@ namespace SmartStore.Admin.Models.Messages
 
         public IList<MessageTemplateLocalizedModel> Locales { get; set; }
         public IList<EmailAccountModel> AvailableEmailAccounts { get; set; }
-
     }
 
     public class MessageTemplateLocalizedModel : ILocalizedModelLocal
@@ -80,5 +90,14 @@ namespace SmartStore.Admin.Models.Messages
 
         [SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.EmailAccount")]
         public int EmailAccountId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment1FileId")]
+		public int? Attachment1FileId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment2FileId")]
+		public int? Attachment2FileId { get; set; }
+
+		[SmartResourceDisplayName("Admin.ContentManagement.MessageTemplates.Fields.Attachment3FileId")]
+		public int? Attachment3FileId { get; set; }
     }
 }

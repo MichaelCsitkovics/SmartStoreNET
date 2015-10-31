@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
+using System.Web.Mvc;
 using SmartStore.Core;
 using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Forums;
+using SmartStore.Utilities;
 
 namespace SmartStore.Services.Forums
 {
@@ -27,7 +29,7 @@ namespace SmartStore.Services.Forums
         /// Gets all forum groups
         /// </summary>
         /// <returns>Forum groups</returns>
-        IList<ForumGroup> GetAllForumGroups();
+		IList<ForumGroup> GetAllForumGroups(bool showHidden = false);
 
         /// <summary>
         /// Inserts a forum group
@@ -105,9 +107,7 @@ namespace SmartStore.Services.Forums
         /// <param name="pageIndex">Page index</param>
         /// <param name="pageSize">Page size</param>
         /// <returns>Forum Topics</returns>
-        IPagedList<ForumTopic> GetAllTopics(int forumId,
-            int customerId, string keywords, ForumSearchType searchType,
-            int limitDays, int pageIndex, int pageSize);
+        IPagedList<ForumTopic> GetAllTopics(int forumId, int customerId, string keywords, ForumSearchType searchType, int limitDays, int pageIndex, int pageSize);
 
         /// <summary>
         /// Gets active forum topics
@@ -346,5 +346,19 @@ namespace SmartStore.Services.Forums
         /// <param name="postId">Post identifier</param>
         /// <returns>Page index</returns>
         int CalculateTopicPageIndex(int forumTopicId, int pageSize, int postId);
+
+		/// <summary>
+		/// Creates a RSS feed with active discussions
+		/// </summary>
+		/// <param name="urlHelper">UrlHelper to generate URLs</param>
+		/// <returns>SmartSyndicationFeed object</returns>
+		SmartSyndicationFeed CreateActiveDiscussionsRssFeed(UrlHelper urlHelper, int forumId);
+
+		/// <summary>
+		/// Creates a RSS feed with forum topics
+		/// </summary>
+		/// <param name="urlHelper">UrlHelper to generate URLs</param>
+		/// <returns>SmartSyndicationFeed object</returns>
+		SmartSyndicationFeed CreateForumRssFeed(UrlHelper urlHelper, int forumId);
     }
 }

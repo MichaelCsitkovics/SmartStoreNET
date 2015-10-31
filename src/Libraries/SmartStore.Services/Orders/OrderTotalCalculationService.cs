@@ -9,7 +9,7 @@ using SmartStore.Core.Domain.Discounts;
 using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Shipping;
 using SmartStore.Core.Domain.Tax;
-using SmartStore.Core.Infrastructure;
+using SmartStore.Core.Plugins;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Discounts;
@@ -31,16 +31,18 @@ namespace SmartStore.Services.Orders
         private readonly IPriceCalculationService _priceCalculationService;
         private readonly ITaxService _taxService;
         private readonly IShippingService _shippingService;
-        private readonly IPaymentService _paymentService;
+		private readonly IProviderManager _providerManager;
         private readonly ICheckoutAttributeParser _checkoutAttributeParser;
         private readonly IDiscountService _discountService;
         private readonly IGiftCardService _giftCardService;
         private readonly IGenericAttributeService _genericAttributeService;
+		private readonly IProductAttributeParser _productAttributeParser;
         private readonly TaxSettings _taxSettings;
         private readonly RewardPointsSettings _rewardPointsSettings;
         private readonly ShippingSettings _shippingSettings;
         private readonly ShoppingCartSettings _shoppingCartSettings;
         private readonly CatalogSettings _catalogSettings;
+
         #endregion
 
         #region Ctor
@@ -68,11 +70,12 @@ namespace SmartStore.Services.Orders
             IPriceCalculationService priceCalculationService,
             ITaxService taxService,
             IShippingService shippingService,
-            IPaymentService paymentService,
+			IProviderManager providerManager,
             ICheckoutAttributeParser checkoutAttributeParser,
             IDiscountService discountService,
             IGiftCardService giftCardService,
             IGenericAttributeService genericAttributeService,
+			IProductAttributeParser productAttributeParser,
             TaxSettings taxSettings,
             RewardPointsSettings rewardPointsSettings,
             ShippingSettings shippingSettings,
@@ -84,11 +87,12 @@ namespace SmartStore.Services.Orders
             this._priceCalculationService = priceCalculationService;
             this._taxService = taxService;
             this._shippingService = shippingService;
-            this._paymentService = paymentService;
+			this._providerManager = providerManager;
             this._checkoutAttributeParser = checkoutAttributeParser;
             this._discountService = discountService;
             this._giftCardService = giftCardService;
             this._genericAttributeService = genericAttributeService;
+			this._productAttributeParser = productAttributeParser;
             this._taxSettings = taxSettings;
             this._rewardPointsSettings = rewardPointsSettings;
             this._shippingSettings = shippingSettings;
@@ -186,12 +190,7 @@ namespace SmartStore.Services.Orders
 
 				decimal taxRate, sciSubTotal, sciExclTax, sciInclTax = decimal.Zero;
 
-				IProductAttributeParser productAttrParser;
-				if (EngineContext.Current.ContainerManager.TryResolve<IProductAttributeParser>(null, out productAttrParser)) 
-				{
-					// make the call unit test safe
-					shoppingCartItem.Item.Product.MergeWithCombination(shoppingCartItem.Item.AttributesXml, productAttrParser);
-				}
+				shoppingCartItem.Item.Product.MergeWithCombination(shoppingCartItem.Item.AttributesXml, _productAttributeParser);
 
 				if (_shoppingCartSettings.RoundPricesDuringCalculation)
 				{
@@ -356,8 +355,7 @@ namespace SmartStore.Services.Orders
 			{
 				foreach (var discount in allDiscounts)
 				{
-					if (_discountService.IsDiscountValid(discount, customer) && discount.DiscountType == DiscountType.AssignedToOrderSubTotal &&
-						!allowedDiscounts.ContainsDiscount(discount))
+					if (discount.DiscountType == DiscountType.AssignedToOrderSubTotal && !allowedDiscounts.Any(x => x.Id == discount.Id) && _discountService.IsDiscountValid(discount, customer))
 					{
 						allowedDiscounts.Add(discount);
 					}
@@ -669,12 +667,17 @@ namespace SmartStore.Services.Orders
 
             var allDiscounts = _discountService.GetAllDiscounts(DiscountType.AssignedToShipping);
             var allowedDiscounts = new List<Discount>();
-            if (allDiscounts != null)
-                foreach (var discount in allDiscounts)
-                    if (_discountService.IsDiscountValid(discount, customer) &&
-                               discount.DiscountType == DiscountType.AssignedToShipping &&
-                               !allowedDiscounts.ContainsDiscount(discount))
-                        allowedDiscounts.Add(discount);
+
+			if (allDiscounts != null)
+			{
+				foreach (var discount in allDiscounts)
+				{
+					if (discount.DiscountType == DiscountType.AssignedToShipping && !allowedDiscounts.Any(x => x.Id == discount.Id) && _discountService.IsDiscountValid(discount, customer))
+					{
+						allowedDiscounts.Add(discount);
+					}
+				}
+			}
 
             appliedDiscount = allowedDiscounts.GetPreferredDiscount(shippingTotal);
             if (appliedDiscount != null)
@@ -800,8 +803,10 @@ namespace SmartStore.Services.Orders
             if (usePaymentMethodAdditionalFee && _taxSettings.PaymentMethodAdditionalFeeIsTaxable)
             {
                 decimal taxRate = decimal.Zero;
+				
+				var provider = _providerManager.GetProvider<IPaymentMethod>(paymentMethodSystemName);
+				decimal paymentMethodAdditionalFee = provider.GetAdditionalHandlingFee(cart, _shoppingCartSettings.RoundPricesDuringCalculation);
 
-                decimal paymentMethodAdditionalFee = _paymentService.GetAdditionalHandlingFee(cart, paymentMethodSystemName);
                 decimal paymentMethodAdditionalFeeExclTax = _taxService.GetPaymentMethodAdditionalFee(paymentMethodAdditionalFee, false, customer, out taxRate);
                 decimal paymentMethodAdditionalFeeInclTax = _taxService.GetPaymentMethodAdditionalFee(paymentMethodAdditionalFee, true, customer, out taxRate);
 
@@ -908,7 +913,9 @@ namespace SmartStore.Services.Orders
             decimal paymentMethodAdditionalFeeWithoutTax = decimal.Zero;
             if (usePaymentMethodAdditionalFee && !String.IsNullOrEmpty(paymentMethodSystemName))
             {
-                decimal paymentMethodAdditionalFee = _paymentService.GetAdditionalHandlingFee(cart, paymentMethodSystemName);
+				var provider = _providerManager.GetProvider<IPaymentMethod>(paymentMethodSystemName);
+				decimal paymentMethodAdditionalFee = provider.GetAdditionalHandlingFee(cart, _shoppingCartSettings.RoundPricesDuringCalculation);
+
                 paymentMethodAdditionalFeeWithoutTax = _taxService.GetPaymentMethodAdditionalFee(paymentMethodAdditionalFee, false, customer);
             }
 
@@ -1065,8 +1072,7 @@ namespace SmartStore.Services.Orders
 			{
 				foreach (var discount in allDiscounts)
 				{
-					if (_discountService.IsDiscountValid(discount, customer) && discount.DiscountType == DiscountType.AssignedToOrderTotal &&
-						!allowedDiscounts.ContainsDiscount(discount))
+					if (discount.DiscountType == DiscountType.AssignedToOrderTotal && !allowedDiscounts.Any(x => x.Id == discount.Id) &&_discountService.IsDiscountValid(discount, customer))
 					{
 						allowedDiscounts.Add(discount);
 					}

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <ItemDefinitionGroup>
     <Reference>
@@ -20,7 +20,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SmartStore.GoogleMerchantCenter</RootNamespace>
     <AssemblyName>SmartStore.GoogleMerchantCenter</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>
     </SccProjectName>
@@ -89,11 +89,11 @@
     </Reference>
     <Reference Include="EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\EntityFramework.6.1.0\lib\net45\EntityFramework.dll</HintPath>
+      <HintPath>..\..\packages\EntityFramework.6.1.3\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
     <Reference Include="EntityFramework.SqlServer, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\EntityFramework.6.1.0\lib\net45\EntityFramework.SqlServer.dll</HintPath>
+      <HintPath>..\..\packages\EntityFramework.6.1.3\lib\net45\EntityFramework.SqlServer.dll</HintPath>
     </Reference>
     <Reference Include="FluentValidation">
       <HintPath>..\..\packages\FluentValidation.5.0.0.1\lib\Net40\FluentValidation.dll</HintPath>
@@ -106,8 +106,12 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.DataAnnotations" />
-    <Reference Include="System.Core" />
+    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Web" />
+    <Reference Include="System.Web.ApplicationServices" />
+    <Reference Include="System.Web.DynamicData" />
+    <Reference Include="System.Web.Entity" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Web.Helpers, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.Helpers.dll</HintPath>
@@ -132,11 +136,10 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\Microsoft.AspNet.WebPages.3.2.3\lib\net45\System.Web.WebPages.Razor.dll</HintPath>
     </Reference>
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="Telerik.Web.Mvc, Version=2012.2.607.340, Culture=neutral, PublicKeyToken=121fae78165ba3d4, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\lib\Telerik\Telerik.Web.Mvc.dll</HintPath>
@@ -150,7 +153,7 @@
       <Link>Properties\AssemblyVersionInfo.cs</Link>
     </Compile>
     <Compile Include="AdminMenu.cs" />
-    <Compile Include="Controllers\FeedFroogleController.cs" />
+    <Compile Include="Controllers\FeedGoogleMerchantCenterController.cs" />
     <Compile Include="Data\GoogleProductObjectContext.cs" />
     <Compile Include="Data\GoogleProductRecordMap.cs" />
     <Compile Include="Data\Migrations\201403112356126_Initial.cs" />
@@ -161,20 +164,24 @@
     <Compile Include="Data\Migrations\201408020941244_IsTouched.Designer.cs">
       <DependentUpon>201408020941244_IsTouched.cs</DependentUpon>
     </Compile>
+    <Compile Include="Data\Migrations\201504211854125_IsActive.cs" />
+    <Compile Include="Data\Migrations\201504211854125_IsActive.Designer.cs">
+      <DependentUpon>201504211854125_IsActive.cs</DependentUpon>
+    </Compile>
     <Compile Include="Data\Migrations\Configuration.cs" />
     <Compile Include="DependencyRegistrar.cs" />
     <Compile Include="Domain\GoogleProductRecord.cs" />
     <Compile Include="Events.cs" />
     <Compile Include="Extensions\MiscExtensions.cs" />
-    <Compile Include="FroogleFeedPlugin.cs" />
-    <Compile Include="FroogleSettings.cs" />
-    <Compile Include="StaticFileGenerationTask.cs" />
-    <Compile Include="Models\FeedFroogleModel.cs" />
+    <Compile Include="GoogleMerchantCenterFeedPlugin.cs" />
+    <Compile Include="Models\ProfileConfigurationModel.cs" />
+    <Compile Include="Providers\ProductExportXmlProvider.cs" />
+    <Compile Include="Models\FeedGoogleMerchantCenterModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RouteProvider.cs" />
     <Compile Include="Services\IGoogleFeedService.cs" />
     <Compile Include="Services\GoogleFeedService.cs" />
-    <Compile Include="Validators\ConfigurationValidator.cs" />
+    <Compile Include="Validators\ProfileConfigurationValidator.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Libraries\SmartStore.Core\SmartStore.Core.csproj">
@@ -198,28 +205,31 @@
     <EmbeddedResource Include="Data\Migrations\201403112356126_Initial.resx">
       <DependentUpon>201403112356126_Initial.cs</DependentUpon>
     </EmbeddedResource>
-    <Content Include="Views\FeedFroogle\Configure.cshtml">
+    <Content Include="Content\smartstore.gmc.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Views\FeedGoogleMerchantCenter\Configure.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <EmbeddedResource Include="Data\Migrations\201408020941244_IsTouched.resx">
       <DependentUpon>201408020941244_IsTouched.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Data\Migrations\201504211854125_IsActive.resx">
+      <DependentUpon>201504211854125_IsActive.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Content\images\mc_logo.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Content\smartstore.feed.froogle.css">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <Content Include="Content\branding.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Description.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Files\taxonomy.de-DE.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Files\taxonomy.en-US.txt">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Content\icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -247,12 +257,17 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Views\FeedFroogle\ProductEditTab.cshtml">
+    <Content Include="Views\FeedGoogleMerchantCenter\ProductEditTab.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <ItemGroup>
     <Content Include="changelog.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Views\FeedGoogleMerchantCenter\ProfileConfiguration.cshtml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

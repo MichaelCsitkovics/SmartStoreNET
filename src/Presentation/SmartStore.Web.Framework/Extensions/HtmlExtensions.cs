@@ -145,42 +145,68 @@ namespace SmartStore.Web.Framework
 			return MvcHtmlString.Create(result.ToString());
 		}
 
-        public static MvcHtmlString SmartLabelFor<TModel, TValue>(this HtmlHelper<TModel> helper, Expression<Func<TModel, TValue>> expression, bool displayHint = true, object htmlAttributes = null)
+        public static MvcHtmlString SmartLabelFor<TModel, TValue>(
+			this HtmlHelper<TModel> helper, 
+			Expression<Func<TModel, TValue>> expression, 
+			bool displayHint = true, 
+			object htmlAttributes = null)
         {
-            var result = new StringBuilder();
-            var metadata = ModelMetadata.FromLambdaExpression(expression, helper.ViewData);
-            string labelText = null;
-            string hint = null;
-            
-            SmartResourceDisplayName resourceDisplayName;
-            object value = null;
+			var metadata = ModelMetadata.FromLambdaExpression(expression, helper.ViewData);
+			object resourceDisplayName = null;
+			metadata.AdditionalValues.TryGetValue("SmartResourceDisplayName", out resourceDisplayName);
 
-            if (metadata.AdditionalValues.TryGetValue("SmartResourceDisplayName", out value))
-            {
-                resourceDisplayName = value as SmartResourceDisplayName;
-                if (resourceDisplayName != null)
-                {
-                    // resolve label display name
-                    labelText = resourceDisplayName.DisplayName.NullEmpty();
-                    if (labelText == null)
-                    {
-                        // take reskey as absolute fallback
-                        labelText = resourceDisplayName.ResourceKey;
-                    }
+			return SmartLabelFor(helper, expression, resourceDisplayName as SmartResourceDisplayName, metadata, displayHint, htmlAttributes);
+        }
 
-                    // resolve hint
-                    if (displayHint)
-                    {
-                        var langId = EngineContext.Current.Resolve<IWorkContext>().WorkingLanguage.Id;
-                        hint = EngineContext.Current.Resolve<ILocalizationService>().GetResource(resourceDisplayName.ResourceKey + ".Hint", langId, false, "", true);
-                    }
-                }
-            }
+		public static MvcHtmlString SmartLabelFor<TModel, TValue>(
+			this HtmlHelper<TModel> helper,
+			Expression<Func<TModel, TValue>> expression,
+			string resourceKey,
+			bool displayHint = true,
+			object htmlAttributes = null)
+		{
+			Guard.ArgumentNotEmpty(() => resourceKey);
+			
+			var metadata = ModelMetadata.FromLambdaExpression(expression, helper.ViewData);
+			var resourceDisplayName = new SmartResourceDisplayName(resourceKey, metadata.PropertyName);
 
-            if (labelText == null)
-            {
-                labelText = metadata.PropertyName.SplitPascalCase();
-            }
+			return SmartLabelFor(helper, expression, resourceDisplayName, metadata, displayHint, htmlAttributes);
+		}
+
+		private static MvcHtmlString SmartLabelFor<TModel, TValue>(
+			this HtmlHelper<TModel> helper, 
+			Expression<Func<TModel, TValue>> expression,
+			SmartResourceDisplayName resourceDisplayName, 
+			ModelMetadata metadata,
+			bool displayHint = true, 
+			object htmlAttributes = null)
+		{
+			var result = new StringBuilder();
+			string labelText = null;
+			string hint = null;
+
+			if (resourceDisplayName != null)
+			{
+				// resolve label display name
+				labelText = resourceDisplayName.DisplayName.NullEmpty();
+				if (labelText == null)
+				{
+					// take reskey as absolute fallback
+					labelText = resourceDisplayName.ResourceKey;
+				}
+
+				// resolve hint
+				if (displayHint)
+				{
+					var langId = EngineContext.Current.Resolve<IWorkContext>().WorkingLanguage.Id;
+					hint = EngineContext.Current.Resolve<ILocalizationService>().GetResource(resourceDisplayName.ResourceKey + ".Hint", langId, false, "", true);
+				}
+			}
+
+			if (labelText == null)
+			{
+				labelText = metadata.PropertyName.SplitPascalCase();
+			}
 
 			var label = helper.LabelFor(expression, labelText, htmlAttributes);
 
@@ -201,8 +227,8 @@ namespace SmartStore.Web.Framework
 				result.Append(label);
 			}
 
-            return MvcHtmlString.Create(result.ToString());
-        }
+			return MvcHtmlString.Create(result.ToString());
+		}
 
         public static MvcHtmlString RequiredHint(this HtmlHelper helper, string additionalText = null)
         {
@@ -257,6 +283,10 @@ namespace SmartStore.Web.Framework
 			monthsList.MergeAttribute("style", "width: 130px");
             var yearsList = new TagBuilder("select");
 			yearsList.MergeAttribute("style", "width: 90px");
+
+            daysList.Attributes.Add("data-native-menu", "false");
+            monthsList.Attributes.Add("data-native-menu", "false");
+            yearsList.Attributes.Add("data-native-menu", "false");
 
             daysList.Attributes.Add("name", dayName);
             monthsList.Attributes.Add("name", monthName);
@@ -406,7 +436,8 @@ namespace SmartStore.Web.Framework
 				var widgets = widgetSelector.GetWidgets(widgetZone, model).ToArray();
 				if (widgets.Any())
 				{
-					var result = helper.Action("WidgetsByZone", "Widget", new { widgets = widgets, model = model, area = "" });
+					var zoneModel = new WidgetZoneModel { Widgets = widgets, WidgetZone = widgetZone, Model = model };
+					var result = helper.Action("WidgetsByZone", "Widget", new { zoneModel = zoneModel, model = model, area = "" });
 					return result;
 				}
 			}
@@ -564,11 +595,13 @@ namespace SmartStore.Web.Framework
 			return MvcHtmlString.Empty;
 		}
 
-		public static MvcHtmlString SettingEditorFor<TModel, TValue>(this HtmlHelper<TModel> helper,
-			Expression<Func<TModel, TValue>> expression, string parentSelector = null)
+		public static MvcHtmlString SettingEditorFor<TModel, TValue>(this HtmlHelper<TModel> helper, 
+			Expression<Func<TModel, TValue>> expression, 
+			string parentSelector = null,
+			object additionalViewData = null)
 		{
 			var checkbox = helper.SettingOverrideCheckbox(expression, parentSelector);
-			var editor = helper.EditorFor(expression);
+			var editor = helper.EditorFor(expression, additionalViewData);
 
 			return MvcHtmlString.Create(checkbox.ToString() + editor.ToString());
 		}
@@ -592,6 +625,55 @@ namespace SmartStore.Web.Framework
 			);
 
 			return MvcHtmlString.Create(result);
+		}
+
+		public static MvcHtmlString IconForFileExtension(this HtmlHelper helper, string fileExtension, bool renderExtensionText)
+		{
+			string result = "";
+
+			if (fileExtension != null && fileExtension.StartsWith("."))
+			{
+				fileExtension = fileExtension.Substring(1);
+			}
+
+			if (fileExtension.IsCaseInsensitiveEqual("xml"))
+			{
+				result = "<i class='fa fa-file-code-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("xls") || fileExtension.IsCaseInsensitiveEqual("xlsx"))
+			{
+				result = "<i class='fa fa-file-excel-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("pdf"))
+			{
+				result = "<i class='fa fa-file-pdf-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("zip"))
+			{
+				result = "<i class='fa fa-file-archive-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("txt") || fileExtension.IsCaseInsensitiveEqual("csv"))
+			{
+				result = "<i class='fa fa-file-text-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("doc"))
+			{
+				result = "<i class='fa fa-file-word-o' title='{0}'></i>";
+			}
+			else if (fileExtension.IsCaseInsensitiveEqual("jpg") || fileExtension.IsCaseInsensitiveEqual("png") || fileExtension.IsCaseInsensitiveEqual("gif"))
+			{
+				result = "<i class='fa fa-file-image-o' title='{0}'></i>";
+			}
+
+			if (renderExtensionText)
+			{
+				if (fileExtension.IsEmpty())
+					result = "<span class='muted'>{0}</span>".FormatInvariant("".NaIfEmpty());
+				else
+					result = result + "<span class='ml4'>{0}</span>";
+			}
+
+			return MvcHtmlString.Create(result.FormatInvariant(fileExtension.NaIfEmpty().ToUpper()));
 		}
     }
 }

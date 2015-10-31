@@ -13,12 +13,22 @@ using SmartStore.Core;
 using SmartStore.Core.Caching;
 using SmartStore.Core.Configuration;
 using SmartStore.Core.Data;
+using SmartStore.Core.Data.Hooks;
+using SmartStore.Core.Email;
 using SmartStore.Core.Events;
 using SmartStore.Core.Fakes;
 using SmartStore.Core.Infrastructure;
 using SmartStore.Core.Infrastructure.DependencyManagement;
+using SmartStore.Core.IO.Media;
+using SmartStore.Core.IO.VirtualPath;
+using SmartStore.Core.IO.WebSite;
+using SmartStore.Core.Localization;
+using SmartStore.Core.Logging;
+using SmartStore.Core.Packaging;
 using SmartStore.Core.Plugins;
+using SmartStore.Core.Themes;
 using SmartStore.Data;
+using SmartStore.Services;
 using SmartStore.Services.Affiliates;
 using SmartStore.Services.Authentication;
 using SmartStore.Services.Authentication.External;
@@ -28,51 +38,43 @@ using SmartStore.Services.Cms;
 using SmartStore.Services.Common;
 using SmartStore.Services.Configuration;
 using SmartStore.Services.Customers;
+using SmartStore.Services.DataExchange;
 using SmartStore.Services.Directory;
 using SmartStore.Services.Discounts;
+using SmartStore.Services.Events;
 using SmartStore.Services.ExportImport;
+using SmartStore.Services.Filter;
 using SmartStore.Services.Forums;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
-using SmartStore.Core.Logging;
+using SmartStore.Services.Logging;
 using SmartStore.Services.Media;
 using SmartStore.Services.Messages;
 using SmartStore.Services.News;
 using SmartStore.Services.Orders;
 using SmartStore.Services.Payments;
+using SmartStore.Services.Pdf;
 using SmartStore.Services.Polls;
 using SmartStore.Services.Security;
 using SmartStore.Services.Seo;
 using SmartStore.Services.Shipping;
+using SmartStore.Services.Stores;
 using SmartStore.Services.Tasks;
 using SmartStore.Services.Tax;
+using SmartStore.Services.Themes;
 using SmartStore.Services.Topics;
-using SmartStore.Web.Framework.Mvc.Routes;
+using SmartStore.Utilities;
+using SmartStore.Web.Framework.Controllers;
+using SmartStore.Web.Framework.Localization;
 using SmartStore.Web.Framework.Mvc.Bundles;
+using SmartStore.Web.Framework.Mvc.Routes;
+using SmartStore.Web.Framework.Plugins;
 using SmartStore.Web.Framework.Themes;
 using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Framework.WebApi;
-using SmartStore.Web.Framework.Plugins;
-using SmartStore.Web.Framework.Controllers;
-using SmartStore.Services.Filter;
-using SmartStore.Core.Data.Hooks;
-using SmartStore.Core.Themes;
-using SmartStore.Services.Themes;
-using SmartStore.Services.Stores;
 using SmartStore.Web.Framework.WebApi.Configuration;
-using SmartStore.Services;
 using Module = Autofac.Module;
-using SmartStore.Core.Localization;
-using SmartStore.Web.Framework.Localization;
-using SmartStore.Core.Email;
-using SmartStore.Services.Events;
-using SmartStore.Services.Logging;
-using SmartStore.Core.Packaging;
-using SmartStore.Core.IO.Media;
-using SmartStore.Core.IO.VirtualPath;
-using SmartStore.Core.IO.WebSite;
-using SmartStore.Utilities;
-using SmartStore.Services.Pdf;
+using SmartStore.Core.Domain.DataExchange;
 
 namespace SmartStore.Web.Framework
 {
@@ -98,6 +100,7 @@ namespace SmartStore.Web.Framework
 			builder.RegisterModule(new IOModule());
 			builder.RegisterModule(new PackagingModule());
 			builder.RegisterModule(new ProvidersModule(typeFinder, pluginFinder));
+            builder.RegisterModule(new TasksModule(typeFinder));
 
 			// sources
 			builder.RegisterSource(new SettingsSource());
@@ -215,13 +218,11 @@ namespace SmartStore.Web.Framework
 
             builder.RegisterType<ScheduleTaskService>().As<IScheduleTaskService>().InstancePerRequest();
 
-			builder.RegisterType<ExportManager>().As<IExportManager>()
-				.WithParameter(ResolvedParameter.ForNamed<IProductService>("nocache"))
-				.WithParameter(ResolvedParameter.ForNamed<ICategoryService>("nocache"))
-				.WithParameter(ResolvedParameter.ForNamed<IManufacturerService>("nocache"))
-				.InstancePerRequest();
-
             builder.RegisterType<ImportManager>().As<IImportManager>().InstancePerRequest();
+			builder.RegisterType<SyncMappingService>().As<ISyncMappingService>().InstancePerRequest();
+
+			builder.RegisterType<ExportService>().As<IExportService>().InstancePerRequest();
+
             builder.RegisterType<MobileDeviceHelper>().As<IMobileDeviceHelper>().InstancePerRequest();
 			builder.RegisterType<UAParserUserAgent>().As<IUserAgent>().InstancePerRequest();
 			builder.RegisterType<WkHtmlToPdfConverter>().As<IPdfConverter>().InstancePerRequest();
@@ -347,7 +348,7 @@ namespace SmartStore.Web.Framework
 		protected override void Load(ContainerBuilder builder)
 		{
 			builder.RegisterType<Notifier>().As<INotifier>().InstancePerRequest();
-			builder.RegisterType<DefaultLogger>().As<ILogger>().InstancePerRequest().OnRelease(x => x.Flush());
+			builder.RegisterType<DefaultLogger>().As<ILogger>().InstancePerRequest();
 			builder.RegisterType<CustomerActivityService>().As<ICustomerActivityService>().InstancePerRequest();
 		}
 
@@ -575,11 +576,15 @@ namespace SmartStore.Web.Framework
 			builder.RegisterType<RoutePublisher>().As<IRoutePublisher>().SingleInstance();
 			builder.RegisterType<BundlePublisher>().As<IBundlePublisher>().SingleInstance();
 			builder.RegisterType<BundleBuilder>().As<IBundleBuilder>().InstancePerRequest();
+			builder.RegisterType<FileDownloadManager>().InstancePerRequest();
 
 			builder.RegisterFilterProvider();
 
 			// global exception handling
-			builder.RegisterType<HandleExceptionFilter>().AsActionFilterFor<Controller>();
+			if (DataSettings.DatabaseIsInstalled())
+			{
+				builder.RegisterType<HandleExceptionFilter>().AsActionFilterFor<Controller>();
+			}
 		}
 
 		static HttpContextBase HttpContextBaseFactory(IComponentContext ctx)
@@ -630,7 +635,7 @@ namespace SmartStore.Web.Framework
 			// register all api controllers
 			builder.RegisterApiControllers(foundAssemblies);
 			
-			builder.RegisterType<WebApiConfigurationPublisher>().As<IWebApiConfigurationPublisher>().SingleInstance();
+			builder.RegisterType<WebApiConfigurationPublisher>().As<IWebApiConfigurationPublisher>();
 		}
 
 		protected override void AttachToComponentRegistration(IComponentRegistry componentRegistry, IComponentRegistration registration)
@@ -762,6 +767,8 @@ namespace SmartStore.Web.Framework
 				var settingPattern = (pluginDescriptor != null ? "Plugins" : "Providers") + ".{0}.{1}"; // e.g. Plugins.MySystemName.DisplayOrder
 				var isConfigurable = typeof(IConfigurable).IsAssignableFrom(type);
 				var isEditable = typeof(IUserEditable).IsAssignableFrom(type);
+				var isHidden = GetIsHidden(type);
+				var exportSupport = GetExportSupport(type);				
 
 				var registration = builder.RegisterType(type).Named<IProvider>(systemName).InstancePerRequest().PropertiesAutowired(PropertyWiringOptions.None);
 				registration.WithMetadata<ProviderMetadata>(m =>
@@ -777,6 +784,8 @@ namespace SmartStore.Web.Framework
 					m.For(em => em.DependentWidgets, dependentWidgets);
 					m.For(em => em.IsConfigurable, isConfigurable);
 					m.For(em => em.IsEditable, isEditable);
+					m.For(em => em.IsHidden, isHidden);
+					m.For(em => em.ExportSupport, exportSupport);
 				});
 
 				// register specific provider type
@@ -787,6 +796,7 @@ namespace SmartStore.Web.Framework
 				RegisterAsSpecificProvider<IWidget>(type, systemName, registration);
 				RegisterAsSpecificProvider<IExternalAuthenticationMethod>(type, systemName, registration);
 				RegisterAsSpecificProvider<IPaymentMethod>(type, systemName, registration);
+				RegisterAsSpecificProvider<IExportProvider>(type, systemName, registration);
 			}
 
 		}
@@ -840,6 +850,29 @@ namespace SmartStore.Web.Framework
 			}
 
 			return 0;
+		}
+
+		private bool GetIsHidden(Type type)
+		{
+			var attr = type.GetAttribute<IsHiddenAttribute>(false);
+			if (attr != null)
+			{
+				return attr.IsHidden;
+			}
+
+			return false;
+		}
+
+		private ExportSupport[] GetExportSupport(Type type)
+		{
+			var attr = type.GetAttribute<ExportSupportingAttribute>(false);
+
+			if (attr != null && attr.Types != null)
+			{
+				return attr.Types;
+			}
+
+			return new ExportSupport[0];
 		}
 
 		private Tuple<string/*Name*/, string/*Description*/> GetFriendlyName(Type type, PluginDescriptor descriptor)
@@ -912,6 +945,10 @@ namespace SmartStore.Web.Framework
 			{
 				return "CMS";
 			}
+			else if (typeof(IExportProvider).IsAssignableFrom(implType))
+			{
+				return "Exporting";
+			}
 
 			return null;
 		}
@@ -919,6 +956,48 @@ namespace SmartStore.Web.Framework
 		#endregion
 
 	}
+
+    public class TasksModule : Module
+    {
+        private readonly ITypeFinder _typeFinder;
+
+        public TasksModule(ITypeFinder typeFinder)
+        {
+            _typeFinder = typeFinder;
+        }
+
+        protected override void Load(ContainerBuilder builder)
+        {
+            if (!DataSettings.DatabaseIsInstalled())
+                return;
+
+            builder.RegisterType<DefaultTaskScheduler>().As<ITaskScheduler>().SingleInstance();
+            builder.RegisterType<TaskExecutor>().As<ITaskExecutor>().InstancePerRequest();
+
+            var taskTypes = _typeFinder.FindClassesOfType<ITask>(ignoreInactivePlugins: true).ToList();
+
+            foreach (var type in taskTypes)
+            {
+                var typeName = type.FullName;
+                builder.RegisterType(type).Named<ITask>(typeName).Keyed<ITask>(type).InstancePerRequest();
+            }
+
+            // Register resolving delegate
+            builder.Register<Func<Type, ITask>>(c =>
+            {
+                var cc = c.Resolve<IComponentContext>();
+                return keyed => cc.ResolveKeyed<ITask>(keyed);
+            });
+
+            builder.Register<Func<string, ITask>>(c =>
+            {
+                var cc = c.Resolve<IComponentContext>();
+                return named => cc.ResolveNamed<ITask>(named);
+            });
+
+        }
+
+    }
 
 	#endregion
 

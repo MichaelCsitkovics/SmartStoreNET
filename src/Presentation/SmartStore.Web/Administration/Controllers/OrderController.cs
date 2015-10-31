@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Web.Mvc;
 using System.Web.Routing;
@@ -21,8 +20,8 @@ using SmartStore.Services.Affiliates;
 using SmartStore.Services.Catalog;
 using SmartStore.Services.Common;
 using SmartStore.Services.Customers;
+using SmartStore.Services.DataExchange.ExportProvider;
 using SmartStore.Services.Directory;
-using SmartStore.Services.ExportImport;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
 using SmartStore.Services.Media;
@@ -63,7 +62,6 @@ namespace SmartStore.Admin.Controllers
         private readonly ICountryService _countryService;
         private readonly IStateProvinceService _stateProvinceService;
         private readonly IProductService _productService;
-        private readonly IExportManager _exportManager;
         private readonly IPermissionService _permissionService;
 	    private readonly IWorkflowMessageService _workflowMessageService;
 	    private readonly ICategoryService _categoryService;
@@ -107,7 +105,7 @@ namespace SmartStore.Admin.Controllers
             IMeasureService measureService,
             IAddressService addressService, ICountryService countryService,
             IStateProvinceService stateProvinceService, IProductService productService,
-            IExportManager exportManager, IPermissionService permissionService,
+            IPermissionService permissionService,
             IWorkflowMessageService workflowMessageService,
             ICategoryService categoryService, IManufacturerService manufacturerService,
             IProductAttributeService productAttributeService, IProductAttributeParser productAttributeParser,
@@ -140,7 +138,6 @@ namespace SmartStore.Admin.Controllers
             this._countryService = countryService;
             this._stateProvinceService = stateProvinceService;
             this._productService = productService;
-            this._exportManager = exportManager;
             this._permissionService = permissionService;
             this._workflowMessageService = workflowMessageService;
             this._categoryService = categoryService;
@@ -187,7 +184,7 @@ namespace SmartStore.Admin.Controllers
                 throw new ArgumentNullException("model");
 
 			var store = _storeService.GetStoreById(order.StoreId);
-			var primaryStoreCurrency = _currencyService.GetCurrencyById(_currencySettings.PrimaryStoreCurrencyId);
+			var primaryStoreCurrency = store.PrimaryStoreCurrency;
 
             model.Id = order.Id;
             model.OrderStatus = order.OrderStatus.GetLocalizedEnum(_localizationService, _workContext);
@@ -205,6 +202,7 @@ namespace SmartStore.Admin.Controllers
             model.TaxDisplayType = _taxSettings.TaxDisplayType;
             model.AffiliateId = order.AffiliateId;
             model.CustomerComment = order.CustomerOrderComment;
+			model.HasNewPaymentNotification = order.HasNewPaymentNotification;
 
 			if (order.AffiliateId != 0)
 			{
@@ -345,7 +343,7 @@ namespace SmartStore.Admin.Controllers
             var pm = _paymentService.LoadPaymentMethodBySystemName(order.PaymentMethodSystemName);
 			if (pm != null)
 			{
-				if (pm.Metadata.SystemName.Equals("Payments.PurchaseOrder", StringComparison.InvariantCultureIgnoreCase))
+                if (pm.Metadata.SystemName.Equals("SmartStore.PurchaseOrderNumber", StringComparison.InvariantCultureIgnoreCase))
 				{
 					model.DisplayPurchaseOrderNumber = true;
 					model.PurchaseOrderNumber = order.PurchaseOrderNumber;
@@ -469,7 +467,7 @@ namespace SmartStore.Admin.Controllers
                     hasDownloadableItems = true;
 
                 orderItem.Product.MergeWithCombination(orderItem.AttributesXml);
-                var orderItemModel = new OrderModel.OrderItemModel()
+                var orderItemModel = new OrderModel.OrderItemModel
                 {
                     Id = orderItem.Id,
 					ProductId = orderItem.ProductId,
@@ -495,7 +493,7 @@ namespace SmartStore.Admin.Controllers
 
 					foreach (var bundleItem in bundleData)
 					{
-						var bundleItemModel = new OrderModel.BundleItemModel()
+						var bundleItemModel = new OrderModel.BundleItemModel
 						{
 							ProductId = bundleItem.ProductId,
 							Sku = bundleItem.Sku,
@@ -817,7 +815,7 @@ namespace SmartStore.Admin.Controllers
                 Data = orders.Select(x =>
                 {
 					var store = _storeService.GetStoreById(x.StoreId);
-                    return new OrderModel()
+                    return new OrderModel
                     {
                         Id = x.Id,
                         OrderNumber = x.GetOrderNumber(),
@@ -827,7 +825,8 @@ namespace SmartStore.Admin.Controllers
                         PaymentStatus = x.PaymentStatus.GetLocalizedEnum(_localizationService, _workContext),
                         ShippingStatus = x.ShippingStatus.GetLocalizedEnum(_localizationService, _workContext),
                         CustomerEmail = x.BillingAddress.Email,
-                        CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc)
+                        CreatedOn = _dateTimeHelper.ConvertToUserTime(x.CreatedOnUtc, DateTimeKind.Utc),
+						HasNewPaymentNotification = x.HasNewPaymentNotification
                     };
                 }),
                 Total = orders.TotalCount
@@ -872,94 +871,40 @@ namespace SmartStore.Admin.Controllers
 
         #region Export / Import
 
+		[Compress]
         public ActionResult ExportXmlAll()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageOrders))
                 return AccessDeniedView();
 
-            try
-            {
-				var orders = _orderService.SearchOrders(0, 0, null, null, null,
-                    null, null, null, null, null, 0, int.MaxValue);
-
-                var xml = _exportManager.ExportOrdersToXml(orders);
-                return new XmlDownloadResult(xml, "orders.xml");
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-                return RedirectToAction("List");
-            }
+			return Export(ExportOrderXmlProvider.SystemName, null);
         }
 
-		[HttpPost]
+		[HttpPost, Compress]
         public ActionResult ExportXmlSelected(string selectedIds)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageOrders))
                 return AccessDeniedView();
 
-            var orders = new List<Order>();
-            if (selectedIds != null)
-            {
-                var ids = selectedIds
-                    .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(x => Convert.ToInt32(x))
-                    .ToArray();
-                orders.AddRange(_orderService.GetOrdersByIds(ids));
-            }
-
-            var xml = _exportManager.ExportOrdersToXml(orders);
-            return new XmlDownloadResult(xml, "orders.xml");
+			return Export(ExportOrderXmlProvider.SystemName, selectedIds);
         }
 
+		[Compress]
 	    public ActionResult ExportExcelAll()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageOrders))
                 return AccessDeniedView();
 
-            try
-            {
-				var orders = _orderService.SearchOrders(0, 0, null, null, null,
-                    null, null, null, null, null, 0, int.MaxValue);
-                
-                byte[] bytes = null;
-                using (var stream = new MemoryStream())
-                {
-                    _exportManager.ExportOrdersToXlsx(stream, orders);
-                    bytes = stream.ToArray();
-                }
-                return File(bytes, "text/xls", "orders.xlsx");
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-                return RedirectToAction("List");
-            }
+			return Export(ExportOrderXlsxProvider.SystemName, null);
         }
 
-		[HttpPost]
+		[HttpPost, Compress]
         public ActionResult ExportExcelSelected(string selectedIds)
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageOrders))
                 return AccessDeniedView();
 
-            var orders = new List<Order>();
-            if (selectedIds != null)
-            {
-                var ids = selectedIds
-                    .Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(x => Convert.ToInt32(x))
-                    .ToArray();
-                orders.AddRange(_orderService.GetOrdersByIds(ids));
-            }
-
-            byte[] bytes = null;
-            using (var stream = new MemoryStream())
-            {
-                _exportManager.ExportOrdersToXlsx(stream, orders);
-                bytes = stream.ToArray();
-            }
-            return File(bytes, "text/xls", "orders.xlsx");
+			return Export(ExportOrderXlsxProvider.SystemName, selectedIds);
         }
 
 		public ActionResult ExportPdf(bool all, string selectedIds = null)
@@ -1640,7 +1585,7 @@ namespace SmartStore.Admin.Controllers
             if (!orderItem.Product.IsDownload)
                 throw new ArgumentException("Product is not downloadable");
 
-            var model = new OrderModel.UploadLicenseModel()
+            var model = new OrderModel.UploadLicenseModel
             {
                 LicenseDownloadId = orderItem.LicenseDownloadId.HasValue ? orderItem.LicenseDownloadId.Value : 0,
                 OrderId = order.Id,
@@ -1671,6 +1616,9 @@ namespace SmartStore.Admin.Controllers
                 orderItem.LicenseDownloadId = model.LicenseDownloadId;
             else
                 orderItem.LicenseDownloadId = null;
+
+			MediaHelper.UpdateDownloadTransientStateFor(orderItem, x => x.LicenseDownloadId);
+
             _orderService.UpdateOrder(order);
 
             //success
@@ -1699,6 +1647,7 @@ namespace SmartStore.Admin.Controllers
 
             //attach license
             orderItem.LicenseDownloadId = null;
+			MediaHelper.UpdateDownloadTransientStateFor(orderItem, x => x.LicenseDownloadId);
             _orderService.UpdateOrder(order);
 
             //success
@@ -1875,7 +1824,7 @@ namespace SmartStore.Admin.Controllers
                 string attributeDescription = _productAttributeFormatter.FormatAttributes(product, attributes, order.Customer);
 
                 //save item
-                var orderItem = new OrderItem()
+                var orderItem = new OrderItem
                 {
                     OrderItemGuid = Guid.NewGuid(),
                     Order = order,
@@ -2428,12 +2377,11 @@ namespace SmartStore.Admin.Controllers
             if (order == null)
                 throw new ArgumentException("No order found with the specified id");
 
-            //order notes
             var orderNoteModels = new List<OrderModel.OrderNote>();
-            foreach (var orderNote in order.OrderNotes
-                .OrderByDescending(on => on.CreatedOnUtc))
+
+            foreach (var orderNote in order.OrderNotes.OrderByDescending(on => on.CreatedOnUtc))
             {
-                orderNoteModels.Add(new OrderModel.OrderNote()
+                orderNoteModels.Add(new OrderModel.OrderNote
                 {
                     Id = orderNote.Id,
                     OrderId = orderNote.OrderId,
@@ -2448,6 +2396,12 @@ namespace SmartStore.Admin.Controllers
                 Data = orderNoteModels,
                 Total = orderNoteModels.Count
             };
+
+			if (order.HasNewPaymentNotification)
+			{
+				order.HasNewPaymentNotification = false;
+				_orderService.UpdateOrder(order);
+			}
 
             return new JsonResult
             {

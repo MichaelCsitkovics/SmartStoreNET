@@ -1,12 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
-using System.Threading;
 using Autofac;
 using Autofac.Builder;
-using Autofac.Integration.Mvc;
-using SmartStore.Utilities;
 using SmartStore.Core.Caching;
 
 namespace SmartStore.Core.Infrastructure.DependencyManagement
@@ -25,9 +21,9 @@ namespace SmartStore.Core.Infrastructure.DependencyManagement
             get { return _container; }
         }
 
-		public T Resolve<T>(string key = "", ILifetimeScope scope = null) where T : class
+		public T Resolve<T>(object key = null, ILifetimeScope scope = null) where T : class
         {
-            if (string.IsNullOrEmpty(key))
+            if (key == null)
             {
 				return (scope ?? Scope()).Resolve<T>();
             }
@@ -49,9 +45,9 @@ namespace SmartStore.Core.Infrastructure.DependencyManagement
 			return (scope ?? Scope()).ResolveNamed(name, type);
         }
 
-		public T[] ResolveAll<T>(string key = "", ILifetimeScope scope = null)
+		public T[] ResolveAll<T>(object key = null, ILifetimeScope scope = null)
         {
-            if (string.IsNullOrEmpty(key))
+            if (key == null)
             {
 				return (scope ?? Scope()).Resolve<IEnumerable<T>>().ToArray();
             }
@@ -121,21 +117,17 @@ namespace SmartStore.Core.Infrastructure.DependencyManagement
 
         public ILifetimeScope Scope()
         {
-			ILifetimeScope scope = null;
-			try
-			{
-				scope = AutofacDependencyResolver.Current.RequestLifetimeScope;
-			}
-			catch { }
-
-			if (scope == null)
-			{
-				// really hackisch. But strange things are going on ?? :-)
-				scope = _container.BeginLifetimeScope("AutofacWebRequest");
-			}
-
+			var scope = _container.Resolve<ILifetimeScopeAccessor>().GetLifetimeScope(null);
 			return scope ?? _container;
         }
+
+		public ILifetimeScopeAccessor ScopeAccessor
+		{
+			get
+			{
+				return _container.Resolve<ILifetimeScopeAccessor>();
+			}
+		}
 
     }
 

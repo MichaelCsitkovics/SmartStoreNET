@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using SmartStore.Core.Domain.Catalog;
 using SmartStore.Web.Framework.Mvc;
 using SmartStore.Web.Framework.UI;
 using SmartStore.Web.Models.Media;
@@ -18,7 +19,9 @@ namespace SmartStore.Web.Models.Catalog
         }
 
         public string Name { get; set; }
+		public string FullName { get; set; }
         public string Description { get; set; }
+		public string BottomDescription { get; set; }
         public string MetaKeywords { get; set; }
         public string MetaDescription { get; set; }
         public string MetaTitle { get; set; }
@@ -32,7 +35,7 @@ namespace SmartStore.Web.Models.Catalog
         public IList<MenuItem> CategoryBreadcrumb { get; set; }
 
         public bool DisplayFilter { get; set; }
-        public bool ShowSubcategoriesAboveProductLists { get; set; }
+		public SubCategoryDisplayType SubCategoryDisplayType { get; set; }
         
         public IList<SubCategoryModel> SubCategories { get; set; }
 

@@ -1,11 +1,4 @@
-﻿using SmartStore.Core;
-using SmartStore.Core.Domain.Customers;
-using SmartStore.Core.Domain.Logging;
-using SmartStore.Core.Infrastructure;
-using SmartStore.Services.Localization;
-using SmartStore.Core.Logging;
-using SmartStore.Services.Security;
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -13,27 +6,26 @@ using System.Net.Http.Headers;
 using System.Web;
 using System.Web.Http;
 using System.Web.Http.Controllers;
+using SmartStore.Core;
+using SmartStore.Core.Domain.Customers;
+using SmartStore.Core.Domain.Logging;
+using SmartStore.Core.Infrastructure;
+using SmartStore.Core.Logging;
 using SmartStore.Services.Customers;
+using SmartStore.Services.Localization;
+using SmartStore.Services.Security;
+using SmartStore.Web.Framework.WebApi.Caching;
 
 namespace SmartStore.Web.Framework.WebApi.Security
 {
-	[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+	[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false)]
 	public class WebApiAuthenticateAttribute : System.Web.Http.AuthorizeAttribute
 	{
-		private readonly IWorkContext _workContext;
-		private readonly IPermissionService _permissionService;
-
 		protected HmacAuthentication _hmac = new HmacAuthentication();
 
-		public WebApiAuthenticateAttribute()
-		{
-			var engine = EngineContext.Current;
-
-			_workContext = engine.Resolve<IWorkContext>();
-			_permissionService = engine.Resolve<IPermissionService>();
-		}
-
-		/// <summary>The system name of the permission</summary>
+		/// <summary>
+		/// The system name of the permission
+		/// </summary>
 		public string Permission { get; set; }
 
 		protected string CreateContentMd5Hash(HttpRequestMessage request)
@@ -53,14 +45,18 @@ namespace SmartStore.Web.Framework.WebApi.Security
 
 			try
 			{
-				if (Permission.HasValue() && _permissionService.GetPermissionRecordBySystemName(Permission) != null)
+				if (Permission.HasValue())
 				{
-					result = _permissionService.Authorize(Permission, customer);
+					var permissionService = EngineContext.Current.Resolve<IPermissionService>();
+
+					if (permissionService.GetPermissionRecordBySystemName(Permission) != null)
+					{
+						result = permissionService.Authorize(Permission, customer);
+					}
 				}
 			}
-			catch (Exception)
-			{
-			}
+			catch {	}
+
 			return result;
 		}
 		protected virtual void LogUnauthorized(HttpActionContext actionContext, HmacResult result, Customer customer)
@@ -73,7 +69,7 @@ namespace SmartStore.Web.Framework.WebApi.Security
 				string strResult = result.ToString();
 				string description = localization.GetResource("Admin.WebApi.AuthResult." + strResult, 0, false, strResult);
 
-				var logContext = new LogContext()
+				var logContext = new LogContext
 				{
 					ShortMessage = localization.GetResource("Admin.WebApi.UnauthorizedRequest").FormatWith(strResult),
 					FullMessage = "{0}\r\n{1}".FormatWith(description, actionContext.Request.Headers.ToString()),
@@ -103,6 +99,7 @@ namespace SmartStore.Web.Framework.WebApi.Security
 			}
 			return customer;
 		}
+
 		protected virtual HmacResult IsAuthenticated(HttpActionContext actionContext, DateTime now, WebApiControllingCacheData cacheControllingData, out Customer customer)
 		{
 			customer = null;
@@ -136,7 +133,7 @@ namespace SmartStore.Web.Framework.WebApi.Security
 			if (Math.Abs((headDateTime - now).TotalMinutes) > maxMinutes)
 				return HmacResult.TimestampOutOfPeriod;
 
-			var cacheUserData = WebApiCaching.UserData();
+			var cacheUserData = WebApiCachingUserData.Data();
 
 			var apiUser = cacheUserData.FirstOrDefault(x => x.PublicKey == headPublicKey);
 			if (apiUser == null)
@@ -145,10 +142,10 @@ namespace SmartStore.Web.Framework.WebApi.Security
 			if (!apiUser.Enabled)
 				return HmacResult.UserDisabled;
 
-			if (apiUser.LastRequest.HasValue && headDateTime <= apiUser.LastRequest.Value)
+			if (!cacheControllingData.NoRequestTimestampValidation && apiUser.LastRequest.HasValue && headDateTime <= apiUser.LastRequest.Value)
 				return HmacResult.TimestampOlderThanLastRequest;
 
-			var context = new WebApiRequestContext()
+			var context = new WebApiRequestContext
 			{
 				HttpMethod = request.HttpMethod,
 				HttpAcceptType = request.Headers["Accept"],
@@ -176,13 +173,16 @@ namespace SmartStore.Web.Framework.WebApi.Security
 			if (customer == null)
 				return HmacResult.UserUnknown;
 
+			if (!customer.Active || customer.Deleted)
+				return HmacResult.UserIsInactive;
+
 			if (!HasPermission(actionContext, customer))
 				return HmacResult.UserHasNoPermission;
 
 			//var headers = HttpContext.Current.Response.Headers;
 			//headers.Add(ApiHeaderName.LastRequest, apiUser.LastRequest.HasValue ? apiUser.LastRequest.Value.ToString("o") : "");
 
-			apiUser.LastRequest = now;
+			apiUser.LastRequest = headDateTime;
 
 			return HmacResult.Success;
 		}
@@ -190,7 +190,7 @@ namespace SmartStore.Web.Framework.WebApi.Security
 		public override void OnAuthorization(HttpActionContext actionContext)
 		{
 			var result = HmacResult.FailedForUnknownReason;
-			var cacheControllingData = WebApiCaching.ControllingData();
+			var cacheControllingData = WebApiCachingControllingData.Data();
 			var now = DateTime.UtcNow;
 			Customer customer = null;
 
@@ -205,13 +205,15 @@ namespace SmartStore.Web.Framework.WebApi.Security
 
 			if (result == HmacResult.Success)
 			{
-				_workContext.CurrentCustomer = customer;
+				// inform core about the authentication. note you cannot use IWorkContext.set_CurrentCustomer here.
+				HttpContext.Current.User = new SmartStorePrincipal(customer, HmacAuthentication.Scheme1);
 
 				var response = HttpContext.Current.Response;
 
 				response.AddHeader(WebApiGlobal.Header.Version, cacheControllingData.Version);
 				response.AddHeader(WebApiGlobal.Header.MaxTop, WebApiGlobal.MaxTop.ToString());
 				response.AddHeader(WebApiGlobal.Header.Date, now.ToString("o"));
+				response.AddHeader(WebApiGlobal.Header.CustomerId, customer.Id.ToString());
 
 				response.Cache.SetCacheability(HttpCacheability.NoCache);
 			}

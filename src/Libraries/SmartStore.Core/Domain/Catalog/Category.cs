@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using System.Runtime.Serialization;
 using SmartStore.Core.Domain.Discounts;
@@ -26,6 +27,12 @@ namespace SmartStore.Core.Domain.Catalog
         [DataMember]
         public string Name { get; set; }
 
+		/// <summary>
+		/// Gets or sets the full name (category page title)
+		/// </summary>
+		[DataMember]
+		public string FullName { get; set; }
+
         /// <summary>
         /// Gets or sets the description
         /// </summary>
@@ -33,10 +40,15 @@ namespace SmartStore.Core.Domain.Catalog
         public string Description { get; set; }
 
 		/// <summary>
+		/// Gets or sets a description displayed at the bottom of the category page
+		/// </summary>
+		[DataMember]
+		public string BottomDescription { get; set; }
+
+		/// <summary>
 		/// Gets or sets the category alias 
 		/// (an optional key for advanced customization)
 		/// </summary>
-		/// <remarks>codehint: sm-add</remarks>
 		[DataMember]
 		public string Alias { get; set; }
 
@@ -143,6 +155,7 @@ namespace SmartStore.Core.Domain.Catalog
         /// <summary>
         /// Gets or sets a value indicating whether the entity has been deleted
         /// </summary>
+		[Index]
         public bool Deleted { get; set; }
 
         /// <summary>

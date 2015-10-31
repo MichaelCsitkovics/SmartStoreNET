@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SmartStore.Collections;
 using SmartStore.Core;
 using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Orders;
@@ -84,7 +85,7 @@ namespace SmartStore.Services.Shipping
 		public virtual IPagedList<Shipment> GetAllShipments(string trackingNumber, DateTime? createdFrom, DateTime? createdTo, 
             int pageIndex, int pageSize)
         {
-            var query = _shipmentRepository.Expand(_shipmentRepository.Table, x => x.Order);
+            var query = _shipmentRepository.Table.Expand(x => x.Order);
 			if (!String.IsNullOrEmpty(trackingNumber))
 				query = query.Where(s => s.TrackingNumber.Contains(trackingNumber));
             if (createdFrom.HasValue)
@@ -108,7 +109,7 @@ namespace SmartStore.Services.Shipping
             if (shipmentIds == null || shipmentIds.Length == 0)
                 return new List<Shipment>();
 
-            var query = from o in _shipmentRepository.Expand(_shipmentRepository.Table, x => x.Order)
+			var query = from o in _shipmentRepository.Table.Expand(x => x.Order)
                         where shipmentIds.Contains(o.Id)
                         select o;
             var shipments = query.ToList();
@@ -122,6 +123,24 @@ namespace SmartStore.Services.Shipping
             }
             return sortedOrders;
         }
+
+		public virtual Multimap<int, Shipment> GetShipmentsByOrderIds(int[] orderIds)
+		{
+			Guard.ArgumentNotNull(() => orderIds);
+
+			var query =
+				from x in _shipmentRepository.TableUntracked.Expand(x => x.ShipmentItems)
+				where orderIds.Contains(x.OrderId)
+				select x;
+
+			var map = query
+				.OrderBy(x => x.OrderId)
+				.ThenBy(x => x.CreatedOnUtc)
+				.ToList()
+				.ToMultimap(x => x.OrderId, x => x);
+
+			return map;
+		}
 
         /// <summary>
         /// Gets a shipment

@@ -27,6 +27,15 @@
                             @Html.ValidationMessageFor(model => model.Locales[item].Name)
                         </td>
                     </tr>
+				 	<tr>
+				 		<td class="adminTitle">
+				 			@Html.SmartLabelFor(model => model.Locales[item].FullName)
+				 		</td>
+				 		<td class="adminData">
+				 			@Html.EditorFor(model => Model.Locales[item].FullName)
+				 			@Html.ValidationMessageFor(model => model.Locales[item].FullName)
+						</td>
+					</tr>
                     <tr>
                         <td class="adminTitle">
                             @Html.SmartLabelFor(model => model.Locales[item].Description)
@@ -34,6 +43,15 @@
                         <td class="adminData">
                             @Html.EditorFor(model => model.Locales[item].Description, Html.RichEditorFlavor())
                             @Html.ValidationMessageFor(model => model.Locales[item].Description)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="adminTitle">
+                            @Html.SmartLabelFor(model => model.Locales[item].BottomDescription)
+                        </td>
+                        <td class="adminData">
+                            @Html.EditorFor(model => model.Locales[item].BottomDescription, Html.RichEditorFlavor())
+                            @Html.ValidationMessageFor(model => model.Locales[item].BottomDescription)
                         </td>
                     </tr>
                     <tr>
@@ -55,11 +73,29 @@
                     </tr>
                     <tr>
                         <td class="adminTitle">
+                            @Html.SmartLabelFor(model => model.FullName)
+                        </td>
+                        <td class="adminData">
+                            @Html.EditorFor(model => model.FullName)
+                            @Html.ValidationMessageFor(model => model.FullName)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="adminTitle">
                             @Html.SmartLabelFor(model => model.Description)
                         </td>
                         <td class="adminData">
                             @Html.EditorFor(x => x.Description, Html.RichEditorFlavor())
                             @Html.ValidationMessageFor(model => model.Description)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="adminTitle">
+                            @Html.SmartLabelFor(model => model.BottomDescription)
+                        </td>
+                        <td class="adminData">
+                            @Html.EditorFor(x => x.BottomDescription, Html.RichEditorFlavor())
+                            @Html.ValidationMessageFor(model => model.BottomDescription)
                         </td>
                     </tr>
                 </table>
@@ -97,7 +133,7 @@
                 @Html.SmartLabelFor(model => model.PictureId)
             </td>
             <td class="adminData">
-                @Html.EditorFor(model => model.PictureId)
+                @Html.EditorFor(model => model.PictureId, new { transientUpload = true })
                 @Html.ValidationMessageFor(model => model.PictureId)
             </td>
         </tr>
@@ -106,15 +142,15 @@
                 @Html.SmartLabelFor(model => model.ParentCategoryId)
             </td>
             <td class="adminData">
-                @* codehint: sm-edit *@
-                @(Html.HiddenFor(x => x.ParentCategoryId, new {
-				style = "min-width: 700px",
-				placeholder = "[" + T("Common.Unspecified") + "]",
-				data_select = true,
-				data_select_lazy = true,
-				data_select_init_text = Model.ParentCategoryBreadcrumb,
-				data_select_url = Url.Action("Allcategories", "Category")
-			}))
+                @(Html.HiddenFor(x => x.ParentCategoryId, new
+				{
+					style = "min-width: 700px",
+					placeholder = "[" + T("Common.Unspecified") + "]",
+					data_select = true,
+					data_select_lazy = true,
+					data_select_init_text = Model.ParentCategoryBreadcrumb,
+					data_select_url = Url.Action("Allcategories", "Category")
+				}))
                 @Html.ValidationMessageFor(model => model.ParentCategoryId)
             </td>
         </tr>
@@ -400,10 +436,10 @@
 
         function toggleAcl() {
             if ($('#@Html.FieldIdFor(model => model.SubjectToAcl)').is(':checked')) {
-                $('#pnl-acl').show();
+                $('.pnl-acl').show();
             }
             else {
-                $('#pnl-acl').hide();
+                $('.pnl-acl').hide();
             }
         }
 
@@ -418,7 +454,7 @@
                 @Html.ValidationMessageFor(model => model.SubjectToAcl)
             </td>
         </tr>
-        <tr id="pnl-acl">
+        <tr class="pnl-acl">
             <td class="adminTitle">
                 @Html.SmartLabelFor(model => model.AvailableCustomerRoles)
             </td>
@@ -430,11 +466,30 @@
                             <input type="checkbox" name="SelectedCustomerRoleIds" value="@customerRole.Id" checked="@(Model.SelectedCustomerRoleIds != null && Model.SelectedCustomerRoleIds.Contains(customerRole.Id))" />@customerRole.Name
                         </label>
                     </div>
-					}
-				}
-				else {
-                    <div>No customer roles defined</div>
-				}</td>
+                    }
+                }
+                else
+                {
+                    <div>
+                        @T("Admin.Configuration.Acl.NoRolesDefined")
+                    </div>
+                }
+            </td>
+        </tr>
+        <tr class="pnl"><td colspan="2"><hr /></td></tr>
+        <tr class="pnl">
+            <td class="adminTitle">
+                &nbsp;
+            </td>
+            <td class="adminData">
+                <div class="alert alert-danger"  >
+                    @T("Admin.Configuration.Category.Acl.AssignToSubCategoriesAndProducts.Hint")
+                </div>
+                <a href="@Url.Action("InheritAclIntoChildren", "Category", new { categoryId = Model.Id })" name="inherit-acl-into-children" class="btn btn-danger">
+                    <i class="fa fa-bolt"></i>&nbsp;
+                    @T("Admin.Configuration.Category.Acl.AssignToSubCategoriesAndProducts")
+                </a>
+            </td>
         </tr>
     </table>
 }
@@ -452,10 +507,10 @@
 
         function toggleStoreMapping() {
         	if ($('#@Html.FieldIdFor(model => model.LimitedToStores)').is(':checked')) {
-        		$('#pnl-available-stores').show();
+        		$('.pnl-available-stores').show();
         	}
         	else {
-        		$('#pnl-available-stores').hide();
+        		$('.pnl-available-stores').hide();
         	}
         }
 
@@ -470,7 +525,7 @@
                 @Html.ValidationMessageFor(model => model.LimitedToStores)
             </td>
         </tr>
-        <tr id="pnl-available-stores">
+        <tr class="pnl-available-stores">
             <td class="adminTitle">
                 @Html.SmartLabelFor(model => model.AvailableStores)
             </td>
@@ -488,7 +543,24 @@
                 else
                 {
                     <div>@T("Admin.Configuration.Stores.NoStoresDefined")</div>
-                }</td>
+                }
+            </td>
+        </tr>
+
+        <tr class="pnl"><td colspan="2"><hr /></td></tr>
+        <tr class="pnl">
+            <td class="adminTitle">
+                &nbsp;
+            </td>
+            <td class="adminData">
+                <div class="alert alert-danger">
+                    @T("Admin.Configuration.Category.Stores.AssignToSubCategoriesAndProducts.Hint")
+                </div>
+                <a href="@Url.Action("InheritStoresIntoChildren", "Category", new { categoryId = Model.Id })" name="assign-stores-to-subcats-and-products" class="btn btn-danger">
+                    <i class="fa fa-bolt"></i>&nbsp;
+                    @T("Admin.Configuration.Category.Stores.AssignToSubCategoriesAndProducts")
+                </a>
+            </td>
         </tr>
     </table>
 }

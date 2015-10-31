@@ -74,7 +74,7 @@ namespace SmartStore.Services.Catalog
         /// <summary>
         /// Gets specification attributes
         /// </summary>
-        /// <returns>Specification attributes</returns>
+		/// <returns>Specification attribute query</returns>
         public virtual IQueryable<SpecificationAttribute> GetSpecificationAttributes()
         {
             var query = 
@@ -85,6 +85,25 @@ namespace SmartStore.Services.Catalog
             return query;
         }
 
+		/// <summary>
+		/// Gets specification attributes by identifier
+		/// </summary>
+		/// <param name="ids">Identifiers</param>
+		/// <returns>Specification attribute query</returns>
+		public virtual IQueryable<SpecificationAttribute> GetSpecificationAttributesByIds(int[] ids)
+		{
+			if (ids == null || ids.Length == 0)
+				return null;
+
+			var query =
+				from sa in _specificationAttributeRepository.Table
+				where ids.Contains(sa.Id)
+				orderby sa.DisplayOrder, sa.Name
+				select sa;
+
+			return query;
+		}
+
         /// <summary>
         /// Deletes a specification attribute
         /// </summary>
@@ -94,7 +113,7 @@ namespace SmartStore.Services.Catalog
             if (specificationAttribute == null)
                 throw new ArgumentNullException("specificationAttribute");
 
-			// codehint: sm-add (delete localized properties of options)
+			// (delete localized properties of options)
 			var options = GetSpecificationAttributeOptionsBySpecificationAttribute(specificationAttribute.Id);
 			foreach (var itm in options) {
 				DeleteSpecificationAttributeOption(itm);
@@ -337,7 +356,6 @@ namespace SmartStore.Services.Catalog
             _eventPublisher.EntityUpdated(productSpecificationAttribute);
         }
 
-		/// <remarks>codehint: sm-add</remarks>
 		public virtual void UpdateProductSpecificationMapping(int specificationAttributeId, string field, bool value) {
 			if (specificationAttributeId == 0 || field.IsEmpty())
 				return;

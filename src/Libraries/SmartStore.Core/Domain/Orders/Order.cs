@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Serialization;
@@ -319,7 +320,6 @@ namespace SmartStore.Core.Domain.Orders
         /// </summary>
         public string CardExpirationYear { get; set; }
 
-        /// codehint:sm-add begin
         /// <summary>
         /// Gets or sets a value indicating whether storing of credit card number is allowed
         /// </summary>
@@ -429,6 +429,7 @@ namespace SmartStore.Core.Domain.Orders
         /// <summary>
         /// Gets or sets a value indicating whether the entity has been deleted
         /// </summary>
+		[Index]
         public bool Deleted { get; set; }
 
         /// <summary>
@@ -448,6 +449,12 @@ namespace SmartStore.Core.Domain.Orders
 		/// </summary>
 		[DataMember]
 		public int? RewardPointsRemaining { get; set; }
+
+		/// <summary>
+		/// Gets or sets a value indicating whether a new payment notification (IPN) arrived
+		/// </summary>
+		[DataMember]
+		public bool HasNewPaymentNotification { get; set; }
 
         #endregion
 

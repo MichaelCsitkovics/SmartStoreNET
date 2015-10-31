@@ -96,28 +96,36 @@ namespace SmartStore.Services.Seo
 
 		private void WriteProducts(UrlHelper urlHelper)
         {
-            var ctx = new ProductSearchContext()
+			var protocol = _securitySettings.ForceSslForAllPages ? "https" : "http";
+
+            var ctx = new ProductSearchContext
 			{
 				OrderBy = ProductSortingEnum.CreatedOn,
-				PageSize = int.MaxValue,
+				PageSize = 500,
 				StoreId = _storeContext.CurrentStoreIdIfMultiStoreMode,
 				VisibleIndividuallyOnly = true
 			};
 
-			var products = _productService.SearchProducts(ctx);
-			var protocol = _securitySettings.ForceSslForAllPages ? "https" : "http";
-            foreach (var product in products)
-            {
-				var url = urlHelper.RouteUrl("Product", new { SeName = product.GetSeName() }, protocol);
-                var updateFrequency = UpdateFrequency.Weekly;
-                var updateTime = product.UpdatedOnUtc;
-                WriteUrlLocation(url, updateFrequency, updateTime);
-            }
+			for (ctx.PageIndex = 0; ctx.PageIndex < 9999999; ++ctx.PageIndex)
+			{
+				var products = _productService.SearchProducts(ctx);
+
+				foreach (var product in products)
+				{
+					var url = urlHelper.RouteUrl("Product", new { SeName = product.GetSeName() }, protocol);
+					var updateFrequency = UpdateFrequency.Weekly;
+					var updateTime = product.UpdatedOnUtc;
+					WriteUrlLocation(url, updateFrequency, updateTime);
+				}
+
+				if (!products.HasNextPage)
+					break;
+			}
         }
 
 		private void WriteTopics(UrlHelper urlHelper)
         {
-            var topics = _topicService.GetAllTopics(_storeContext.CurrentStore.Id).ToList().FindAll(t => t.IncludeInSitemap);
+            var topics = _topicService.GetAllTopics(_storeContext.CurrentStore.Id).ToList().FindAll(t => t.IncludeInSitemap && !t.RenderAsWidget);
 			var protocol = _securitySettings.ForceSslForAllPages ? "https" : "http";
             foreach (var topic in topics)
             {

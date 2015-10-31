@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SmartStore.Core</RootNamespace>
     <AssemblyName>SmartStore.Core</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>
     </SccProjectName>
@@ -71,11 +71,11 @@
     </Reference>
     <Reference Include="EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\EntityFramework.6.1.0\lib\net45\EntityFramework.dll</HintPath>
+      <HintPath>..\..\packages\EntityFramework.6.1.3\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
     <Reference Include="EntityFramework.SqlServer, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\EntityFramework.6.1.0\lib\net45\EntityFramework.SqlServer.dll</HintPath>
+      <HintPath>..\..\packages\EntityFramework.6.1.3\lib\net45\EntityFramework.SqlServer.dll</HintPath>
     </Reference>
     <Reference Include="Fasterflect, Version=2.1.3.0, Culture=neutral, PublicKeyToken=38d18473284c1ca7, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -101,10 +101,10 @@
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.configuration" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
     <Reference Include="System.Linq.Dynamic">
       <HintPath>..\..\packages\System.Linq.Dynamic.1.0.0\lib\net40\System.Linq.Dynamic.dll</HintPath>
     </Reference>
+    <Reference Include="System.Net.Http" />
     <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel" />
@@ -152,18 +152,43 @@
     <Compile Include="Caching\RequestCache.cs" />
     <Compile Include="Caching\StaticCache.cs" />
     <Compile Include="Caching\ICache.cs" />
+    <Compile Include="Collections\LazyMultimap.cs" />
     <Compile Include="Collections\QuerystringBuilder.cs" />
     <Compile Include="Collections\TopologicalSorter.cs" />
+    <Compile Include="Data\IDbContextExtensions.cs" />
     <Compile Include="Data\ITransaction.cs" />
+    <Compile Include="Domain\Catalog\PriceDisplayType.cs" />
+    <Compile Include="Domain\Customers\CustomerNumberVisibility.cs" />
+    <Compile Include="Domain\Customers\CustomerNumberMethod.cs" />
+    <Compile Include="Domain\DataExchange\SyncMapping.cs" />
+    <Compile Include="Domain\DataExchange\DataExchangeSettings.cs" />
+    <Compile Include="Domain\DataExchange\ExportDeployment.cs" />
+    <Compile Include="Domain\DataExchange\ExportProjection.cs" />
     <Compile Include="Domain\Directory\QuantityUnit.cs" />
+    <Compile Include="Domain\Common\RestrictionContextTypes.cs" />
+    <Compile Include="Domain\DataExchange\ExportCore.cs" />
+    <Compile Include="Domain\DataExchange\ExportFilter.cs" />
+    <Compile Include="Domain\DataExchange\ExportProfile.cs" />
+    <Compile Include="Domain\Messages\EmailAttachmentStorageLocation.cs" />
+    <Compile Include="Domain\Messages\QueuedEmailAttachment.cs" />
+    <Compile Include="Domain\Payments\PaymentMethod.cs" />
     <Compile Include="Domain\Seo\CanonicalHostNameRule.cs" />
     <Compile Include="Extensions\IOExtensions.cs" />
     <Compile Include="Extensions\DecimalExtensions.cs" />
+    <Compile Include="Data\IQueryableExtensions.cs" />
+    <Compile Include="Extensions\XPathExtensions.cs" />
     <Compile Include="IActivatable.cs" />
+    <Compile Include="Infrastructure\ContextState.cs" />
+    <Compile Include="Infrastructure\DependencyManagement\DefaultLifetimeScopeAccessor.cs" />
+    <Compile Include="Infrastructure\DependencyManagement\DefaultLifetimeScopeProvider.cs" />
+    <Compile Include="Infrastructure\DependencyManagement\ILifetimeScopeAccessor.cs" />
+    <Compile Include="ITransient.cs" />
     <Compile Include="Infrastructure\MostRecentlyUsedList.cs" />
+    <Compile Include="Localization\LocalizationHelper.cs" />
     <Compile Include="Plugins\IConfigurable.cs" />
     <Compile Include="Plugins\Providers\DependentWidgetsAttribute.cs" />
     <Compile Include="Plugins\Providers\DisplayOrderAttribute.cs" />
+    <Compile Include="Plugins\Providers\IsHiddenAttribute.cs" />
     <Compile Include="Plugins\Providers\IUserEditable.cs" />
     <Compile Include="Plugins\Providers\IProvider.cs" />
     <Compile Include="Plugins\Providers\IProviderManager.cs" />
@@ -215,7 +240,6 @@
     <Compile Include="Domain\Stores\StoreMapping.cs" />
     <Compile Include="Domain\Themes\ThemeSettings.cs" />
     <Compile Include="Domain\Themes\ThemeVariable.cs" />
-    <Compile Include="Email\Attachment.cs" />
     <Compile Include="Email\DefaultEmailSender.cs" />
     <Compile Include="Email\EmailAddress.cs" />
     <Compile Include="Email\EmailException.cs" />
@@ -233,7 +257,6 @@
     <Compile Include="Extensions\XmlWriterExtensions.cs" />
     <Compile Include="IMergedData.cs" />
     <Compile Include="Async\AsyncRunner.cs" />
-    <Compile Include="Infrastructure\DependencyManagement\AutofacLifetimeScopeProvider.cs" />
     <Compile Include="IO\Media\FileSystemStorageProvider.cs" />
     <Compile Include="IO\Media\IStorageFile.cs" />
     <Compile Include="IO\Media\IStorageFolder.cs" />
@@ -330,7 +353,6 @@
     <Compile Include="Extensions\MiscExtensions.cs" />
     <Compile Include="Extensions\StreamExtensions.cs" />
     <Compile Include="Extensions\LinqExtensions.cs" />
-    <Compile Include="Extensions\ListExtensions.cs" />
     <Compile Include="Extensions\StringExtensions.cs" />
     <Compile Include="Extensions\TypeDescriptorExtensions.cs" />
     <Compile Include="Extensions\TypeExtensions.cs" />
@@ -346,6 +368,7 @@
     <Compile Include="Caching\ICacheManager.cs" />
     <Compile Include="Caching\NullCache.cs" />
     <Compile Include="Plugins\LoadPluginResult.cs" />
+    <Compile Include="Security\SmartStorePrincipal.cs" />
     <Compile Include="Themes\DefaultThemeRegistry.cs" />
     <Compile Include="Themes\ThemeFolderData.cs" />
     <Compile Include="Themes\ThemeTouchedEvent.cs" />
@@ -546,11 +569,14 @@
     <Compile Include="Utilities\CollectionHelper.cs" />
     <Compile Include="Utilities\DateTimeConvert.cs" />
     <Compile Include="Utilities\DictionaryConverter.cs" />
+    <Compile Include="Utilities\FileDownloadManager.cs" />
+    <Compile Include="Utilities\FileSystemHelper.cs" />
     <Compile Include="Utilities\Inflector.cs" />
     <Compile Include="Extensions\JsonExtensions.cs" />
     <Compile Include="Utilities\Prettifier.cs" />
     <Compile Include="Utilities\Range.cs" />
     <Compile Include="Utilities\SeoHelper.cs" />
+    <Compile Include="Utilities\SmartSyndicationFeed.cs" />
     <Compile Include="Utilities\StringTokenizer.cs" />
     <Compile Include="Utilities\Threading\LockExtensions.cs" />
     <Compile Include="Utilities\Threading\ReadLockDisposable.cs" />
@@ -580,6 +606,7 @@
   <ItemGroup>
     <Compile Include="Infrastructure\ObjectSignatureAttribute.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

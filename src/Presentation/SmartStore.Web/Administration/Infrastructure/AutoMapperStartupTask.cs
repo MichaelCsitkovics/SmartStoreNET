@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Linq;
 using AutoMapper;
 using SmartStore.Admin.Models.Blogs;
 using SmartStore.Admin.Models.Catalog;
@@ -102,6 +103,7 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.PhoneRequired, mo => mo.Ignore())
                 .ForMember(dest => dest.FaxEnabled, mo => mo.Ignore())
                 .ForMember(dest => dest.FaxRequired, mo => mo.Ignore())
+				.ForMember(dest => dest.EmailMatch, mo => mo.Ignore())
                 .ForMember(dest => dest.CountryName, mo => mo.MapFrom(src => src.Country != null ? src.Country.Name : null))
                 .ForMember(dest => dest.StateProvinceName, mo => mo.MapFrom(src => src.StateProvince != null ? src.StateProvince.Name : null));
             Mapper.CreateMap<AddressModel, Address>()
@@ -115,7 +117,9 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.RestrictedShippingMethods, mo => mo.Ignore());
             Mapper.CreateMap<Country, CountryModel>()
                 .ForMember(dest => dest.NumberOfStates, mo => mo.MapFrom(src => src.StateProvinces != null ? src.StateProvinces.Count : 0))
-                .ForMember(dest => dest.Locales, mo => mo.Ignore());
+                .ForMember(dest => dest.Locales, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
+				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore());
             //state/provinces
             Mapper.CreateMap<StateProvince, StateProvinceModel>()
                 .ForMember(dest => dest.DisplayOrder1, mo => mo.MapFrom(src => src.DisplayOrder))
@@ -144,17 +148,20 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore());
             Mapper.CreateMap<MessageTemplateModel, MessageTemplate>();
             //queued email
-            Mapper.CreateMap<QueuedEmail, QueuedEmailModel>()
-                .ForMember(dest => dest.EmailAccountName, mo => mo.MapFrom(src => src.EmailAccount != null ? src.EmailAccount.FriendlyName : string.Empty))
-                .ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
-                .ForMember(dest => dest.SentOn, mo => mo.Ignore());
+			Mapper.CreateMap<QueuedEmail, QueuedEmailModel>()
+				.ForMember(dest => dest.EmailAccountName, mo => mo.MapFrom(src => src.EmailAccount != null ? src.EmailAccount.FriendlyName : string.Empty))
+				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
+				.ForMember(dest => dest.SentOn, mo => mo.Ignore())
+				.ForMember(dest => dest.AttachmentsCount, mo => mo.MapFrom(src => src.Attachments.Count))
+				.ForMember(dest => dest.Attachments, mo => mo.MapFrom(src => src.Attachments.Select(x => new QueuedEmailModel.QueuedEmailAttachmentModel { Id = x.Id, Name = x.Name, MimeType = x.MimeType } )));
             Mapper.CreateMap<QueuedEmailModel, QueuedEmail>()
                 .ForMember(dest=> dest.CreatedOnUtc, dt=> dt.Ignore())
                 .ForMember(dest => dest.SentOnUtc, mo => mo.Ignore())
                 .ForMember(dest => dest.EmailAccount, mo => mo.Ignore())
                 .ForMember(dest => dest.EmailAccountId, mo => mo.Ignore())
 				.ForMember(dest => dest.ReplyTo, mo => mo.Ignore())
-				.ForMember(dest => dest.ReplyToName, mo => mo.Ignore());
+				.ForMember(dest => dest.ReplyToName, mo => mo.Ignore())
+				.ForMember(dest => dest.Attachments, mo => mo.Ignore());
             //campaign
 			Mapper.CreateMap<Campaign, CampaignModel>()
 				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
@@ -171,12 +178,14 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.Locales, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore())
-				.ForMember(dest => dest.AvailableWidgetZones, mo => mo.Ignore());
+				.ForMember(dest => dest.AvailableWidgetZones, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableTitleTags, mo => mo.Ignore());
             Mapper.CreateMap<TopicModel, Topic>();
 
             //category
 			Mapper.CreateMap<Category, CategoryModel>()
 				.ForMember(dest => dest.AvailableCategoryTemplates, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableDefaultViewModes, mo => mo.Ignore())
 				.ForMember(dest => dest.Locales, mo => mo.Ignore())
 				.ForMember(dest => dest.Breadcrumb, mo => mo.Ignore())
 				.ForMember(dest => dest.ParentCategoryBreadcrumb, mo => mo.Ignore())
@@ -234,6 +243,7 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableTaxCategories, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableMeasureUnits, mo => mo.Ignore())
 				.ForMember(dest => dest.PrimaryStoreCurrencyCode, mo => mo.Ignore())
 				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
 				.ForMember(dest => dest.UpdatedOn, mo => mo.Ignore())
@@ -311,6 +321,8 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
 				.ForMember(dest => dest.IsPrimaryExchangeRateCurrency, mo => mo.Ignore())
 				.ForMember(dest => dest.IsPrimaryStoreCurrency, mo => mo.Ignore())
+				.ForMember(dest => dest.PrimaryStoreCurrencyStores, mo => mo.Ignore())
+				.ForMember(dest => dest.PrimaryExchangeRateCurrencyStores, mo => mo.Ignore())
 				.ForMember(dest => dest.Locales, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore())			
@@ -327,13 +339,15 @@ namespace SmartStore.Admin.Infrastructure
             // Measure unit
             Mapper.CreateMap<QuantityUnit, QuantityUnitModel>()
                 .ForMember(dest => dest.Locales, mo => mo.Ignore());
-            Mapper.CreateMap<QuantityUnitModel, QuantityUnit>();
+            Mapper.CreateMap<QuantityUnitModel, QuantityUnit>()
+				.ForMember(dest => dest.DisplayLocale, mo => mo.Ignore());
 
             // ContentSlider slides
             Mapper.CreateMap<ContentSliderSettings, ContentSliderSettingsModel>()
                 .ForMember(dest => dest.Id, mo => mo.Ignore())
 				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
-				.ForMember(dest => dest.SearchStoreId, mo => mo.Ignore());
+				.ForMember(dest => dest.SearchStoreId, mo => mo.Ignore())
+				.ForMember(dest => dest.StoreCount, mo => mo.Ignore());
             Mapper.CreateMap<ContentSliderSettingsModel, ContentSliderSettings>();
 
 			Mapper.CreateMap<ContentSliderSlideSettings, ContentSliderSlideModel>()
@@ -362,6 +376,7 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.QuantityUnit, mo => mo.Ignore())
                 .ForMember(dest => dest.Product, mo => mo.Ignore())
                 .ForMember(dest => dest.AssignedPictureIds, mo => mo.Ignore())
+				.ForMember(dest => dest.QuantityUnitId, mo => mo.Ignore())
                 .AfterMap((src, dest) => dest.SetAssignedPictureIds(src.AssignedPictureIds));
 
             //measure weights
@@ -377,16 +392,27 @@ namespace SmartStore.Admin.Infrastructure
             Mapper.CreateMap<TaxCategoryModel, TaxCategory>();
             //shipping methods
             Mapper.CreateMap<ShippingMethod, ShippingMethodModel>()
-                .ForMember(dest => dest.Locales, mo => mo.Ignore());
-            Mapper.CreateMap<ShippingMethodModel, ShippingMethod>()
-                .ForMember(dest => dest.RestrictedCountries, mo => mo.Ignore());
+                .ForMember(dest => dest.Locales, mo => mo.Ignore())
+				.ForMember(dest => dest.ExcludedCountryIds, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableCustomerRoles, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableCountries, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableCountryExclusionContextTypes, mo => mo.Ignore());
+			Mapper.CreateMap<ShippingMethodModel, ShippingMethod>()
+				.ForMember(dest => dest.RestrictedCountries, mo => mo.Ignore())
+				.ForMember(dest => dest.ExcludedCustomerRoleIds, mo => mo.Ignore())
+				.ForMember(dest => dest.CountryExclusionContextId, mo => mo.Ignore());
             //plugins
             Mapper.CreateMap<PluginDescriptor, PluginModel>()
                 .ForMember(dest => dest.ConfigurationUrl, mo => mo.Ignore())
 				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore())
                 .ForMember(dest => dest.Locales, mo => mo.Ignore())
                 .ForMember(dest => dest.IconUrl, mo => mo.Ignore())
-				.ForMember(dest => dest.ConfigurationRoute, mo => mo.Ignore());
+				.ForMember(dest => dest.ConfigurationRoute, mo => mo.Ignore())
+				.ForMember(dest => dest.LicenseUrl, mo => mo.Ignore())
+				.ForMember(dest => dest.IsLicensable, mo => mo.Ignore())
+				.ForMember(dest => dest.LicenseState, mo => mo.Ignore())
+				.ForMember(dest => dest.TruncatedLicenseKey, mo => mo.Ignore())
+				.ForMember(dest => dest.RemainingDemoUsageDays, mo => mo.Ignore());
             //newsLetter subscriptions
             Mapper.CreateMap<NewsLetterSubscription, NewsLetterSubscriptionModel>()
                 .ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
@@ -397,13 +423,19 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.StoreId, mo => mo.Ignore());
             //forums
             Mapper.CreateMap<ForumGroup, ForumGroupModel>()
-                .ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
+				.ForMember(dest => dest.Locales, mo => mo.Ignore())
+				.ForMember(dest => dest.SeName, mo => mo.MapFrom(src => src.GetSeName(0, true, false)))
+				.ForMember(dest => dest.AvailableStores, mo => mo.Ignore())
+				.ForMember(dest => dest.SelectedStoreIds, mo => mo.Ignore())
+				.ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
                 .ForMember(dest => dest.ForumModels, mo => mo.Ignore());
             Mapper.CreateMap<ForumGroupModel, ForumGroup>()
                 .ForMember(dest => dest.CreatedOnUtc, mo => mo.Ignore())
                 .ForMember(dest => dest.UpdatedOnUtc, mo => mo.Ignore())
                 .ForMember(dest => dest.Forums, mo => mo.Ignore());
             Mapper.CreateMap<Forum, ForumModel>()
+				.ForMember(dest => dest.Locales, mo => mo.Ignore())
+				.ForMember(dest => dest.SeName, mo => mo.MapFrom(src => src.GetSeName(0, true, false)))
                 .ForMember(dest => dest.CreatedOn, mo => mo.Ignore())
                 .ForMember(dest => dest.ForumGroups, mo => mo.Ignore());
             Mapper.CreateMap<ForumModel, Forum>()
@@ -475,7 +507,8 @@ namespace SmartStore.Admin.Infrastructure
             Mapper.CreateMap<ProductAttributeModel, ProductAttribute>();
             //specification attributes
             Mapper.CreateMap<SpecificationAttribute, SpecificationAttributeModel>()
-                .ForMember(dest => dest.Locales, mo => mo.Ignore());
+                .ForMember(dest => dest.Locales, mo => mo.Ignore())
+				.ForMember(dest => dest.OptionCount, mo => mo.Ignore());
             Mapper.CreateMap<SpecificationAttributeModel, SpecificationAttribute>()
                 .ForMember(dest => dest.SpecificationAttributeOptions, mo => mo.Ignore());
             Mapper.CreateMap<SpecificationAttributeOption, SpecificationAttributeOptionModel>()
@@ -542,9 +575,13 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.IsRecipientNotified, mo => mo.Ignore())
                 .ForMember(dest => dest.CreatedOnUtc, mo => mo.Ignore());
 			//stores
-			Mapper.CreateMap<Store, StoreModel>();
-			Mapper.CreateMap<StoreModel, Store>();
-
+			Mapper.CreateMap<Store, StoreModel>()
+				.ForMember(dest => dest.AvailableCurrencies, mo => mo.Ignore())
+				.ForMember(dest => dest.PrimaryStoreCurrencyName, mo => mo.Ignore())
+				.ForMember(dest => dest.PrimaryExchangeRateCurrencyName, mo => mo.Ignore());
+			Mapper.CreateMap<StoreModel, Store>()
+				.ForMember(dest => dest.PrimaryStoreCurrency, mo => mo.Ignore())
+				.ForMember(dest => dest.PrimaryExchangeRateCurrency, mo => mo.Ignore());
             //Settings
             Mapper.CreateMap<TaxSettings, TaxSettingsModel>()
                 .ForMember(dest => dest.DefaultTaxAddress, mo => mo.Ignore())
@@ -579,9 +616,12 @@ namespace SmartStore.Admin.Infrastructure
             Mapper.CreateMap<ShippingSettingsModel, ShippingSettings>()
                 .ForMember(dest => dest.ActiveShippingRateComputationMethodSystemNames, mo => mo.Ignore())
                 .ForMember(dest => dest.ReturnValidOptionsIfThereAreAny, mo => mo.Ignore());
-            Mapper.CreateMap<CatalogSettings, CatalogSettingsModel>()
-                .ForMember(dest => dest.AvailableDefaultViewModes, mo => mo.Ignore())
-				.ForMember(dest => dest.AvailableDeliveryTimes, mo => mo.Ignore());
+			Mapper.CreateMap<CatalogSettings, CatalogSettingsModel>()
+				.ForMember(dest => dest.AvailableSubCategoryDisplayTypes, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailablePriceDisplayTypes, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableDefaultViewModes, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableDeliveryTimes, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableSortOrderModes, mo => mo.Ignore());
             Mapper.CreateMap<CatalogSettingsModel, CatalogSettings>()
                 .ForMember(dest => dest.PageShareCode, mo => mo.Ignore())
                 .ForMember(dest => dest.DefaultProductRatingValue, mo => mo.Ignore())
@@ -593,10 +633,9 @@ namespace SmartStore.Admin.Infrastructure
                 .ForMember(dest => dest.DisplayTierPricesWithDiscounts, mo => mo.Ignore())
                 .ForMember(dest => dest.FileUploadMaximumSizeBytes, mo => mo.Ignore())
                 .ForMember(dest => dest.FileUploadAllowedExtensions, mo => mo.Ignore())
-                .ForMember(dest => dest.ShowProductImagesInSearchAutoComplete, mo => mo.Ignore())
                 .ForMember(dest => dest.ProductSearchPageSize, mo => mo.Ignore())
-                .ForMember(dest => dest.ManufacturersBlockItemsToDisplay, mo => mo.Ignore())
-				.ForMember(dest => dest.MostRecentlyUsedCategoriesMaxSize, mo => mo.Ignore());
+				.ForMember(dest => dest.MostRecentlyUsedCategoriesMaxSize, mo => mo.Ignore())
+				.ForMember(dest => dest.MostRecentlyUsedManufacturersMaxSize, mo => mo.Ignore());
             Mapper.CreateMap<RewardPointsSettings, RewardPointsSettingsModel>()
                 .ForMember(dest => dest.PrimaryStoreCurrencyCode, mo => mo.Ignore())
 				.ForMember(dest => dest.PointsForPurchases_OverrideForStore, mo => mo.Ignore());
@@ -612,16 +651,19 @@ namespace SmartStore.Admin.Infrastructure
 				.ForMember(dest => dest.Id, mo => mo.Ignore());
             Mapper.CreateMap<ShoppingCartSettings, ShoppingCartSettingsModel>();
 			Mapper.CreateMap<ShoppingCartSettingsModel, ShoppingCartSettings>()
-				.ForMember(dest => dest.MoveItemsFromWishlistToCart, mo => mo.Ignore());
-            Mapper.CreateMap<MediaSettings, MediaSettingsModel>()
-                .ForMember(dest => dest.PicturesStoredIntoDatabase, mo => mo.Ignore())
-                .ForMember(dest => dest.AvailablePictureZoomTypes, mo => mo.Ignore());
+				.ForMember(dest => dest.MoveItemsFromWishlistToCart, mo => mo.Ignore())
+				.ForMember(dest => dest.ShowItemsFromWishlistToCartButton, mo => mo.Ignore());
+			Mapper.CreateMap<MediaSettings, MediaSettingsModel>()
+				.ForMember(dest => dest.PicturesStoredIntoDatabase, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailablePictureZoomTypes, mo => mo.Ignore());
             Mapper.CreateMap<MediaSettingsModel, MediaSettings>()
                 //.ForMember(dest => dest.DefaultPictureZoomEnabled, mo => mo.Ignore())
                 .ForMember(dest => dest.DefaultImageQuality, mo => mo.Ignore())
                 .ForMember(dest => dest.MultipleThumbDirectories, mo => mo.Ignore())
                 .ForMember(dest => dest.AutoCompleteSearchThumbPictureSize, mo => mo.Ignore());
-            Mapper.CreateMap<CustomerSettings,  CustomerUserSettingsModel.CustomerSettingsModel>();
+			Mapper.CreateMap<CustomerSettings, CustomerUserSettingsModel.CustomerSettingsModel>()
+				.ForMember(dest => dest.AvailableCustomerNumberMethods, mo => mo.Ignore())
+				.ForMember(dest => dest.AvailableCustomerNumberVisibilities, mo => mo.Ignore());
             Mapper.CreateMap<CustomerUserSettingsModel.CustomerSettingsModel, CustomerSettings>()
                 .ForMember(dest => dest.HashedPasswordFormat, mo => mo.Ignore())
                 .ForMember(dest => dest.PasswordMinLength, mo => mo.Ignore())

@@ -2,9 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Web.Mvc;
+using SmartStore.Collections;
 using SmartStore.Core;
 using SmartStore.Core.Domain.Catalog;
+using SmartStore.Core.Domain.Customers;
+using SmartStore.Core.Domain.Discounts;
 using SmartStore.Core.Domain.Orders;
+using SmartStore.Utilities;
 
 namespace SmartStore.Services.Catalog
 {
@@ -102,9 +107,9 @@ namespace SmartStore.Services.Catalog
         /// <summary>
         /// Gets a product by GTIN
         /// </summary>
-        /// <param name="sku">SKU</param>
+		/// <param name="gtin">GTIN</param>
         /// <returns>Product</returns>
-        Product GetProductByGtin(string sku);
+		Product GetProductByGtin(string gtin);
         
 		/// <summary>
 		/// Adjusts inventory
@@ -151,6 +156,34 @@ namespace SmartStore.Services.Catalog
 		/// <param name="product">Product</param>
         void UpdateHasDiscountsApplied(Product product);
 
+		/// <summary>
+		/// Creates a RSS feed with recently added products
+		/// </summary>
+		/// <param name="urlHelper">UrlHelper to generate URLs</param>
+		/// <returns>SmartSyndicationFeed object</returns>
+		SmartSyndicationFeed CreateRecentlyAddedProductsRssFeed(UrlHelper urlHelper);
+
+		/// <summary>
+		/// Get product tags by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <returns>Map of product tags</returns>
+		Multimap<int, ProductTag> GetProductTagsByProductIds(int[] productIds);
+
+		/// <summary>
+		/// Get applied discounts by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <returns>Map of applied discounts</returns>
+		Multimap<int, Discount> GetAppliedDiscountsByProductIds(int[] productIds);
+
+		/// <summary>
+		/// Get product specification attributes by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <returns>Map of product specification attributes</returns>
+		Multimap<int, ProductSpecificationAttribute> GetProductSpecificationAttributesByProductIds(int[] productIds);
+
         #endregion
 
         #region Related products
@@ -187,6 +220,13 @@ namespace SmartStore.Services.Catalog
         /// </summary>
         /// <param name="relatedProduct">Related product</param>
         void UpdateRelatedProduct(RelatedProduct relatedProduct);
+
+		/// <summary>
+		/// Ensure existence of all mutually related products
+		/// </summary>
+		/// <param name="productId1">First product identifier</param>
+		/// <returns>Number of inserted related products</returns>
+		int EnsureMutuallyRelatedProducts(int productId1);
 
         #endregion
 
@@ -233,6 +273,13 @@ namespace SmartStore.Services.Catalog
         /// <returns>Cross-sells</returns>
 		IList<Product> GetCrosssellProductsByShoppingCart(IList<OrganizedShoppingCartItem> cart, int numberOfProducts);
 
+		/// <summary>
+		/// Ensure existence of all mutually cross selling products
+		/// </summary>
+		/// <param name="productId1">First product identifier</param>
+		/// <returns>Number of inserted cross selling products</returns>
+		int EnsureMutuallyCrossSellProducts(int productId1);
+
         #endregion
         
         #region Tier prices
@@ -249,6 +296,15 @@ namespace SmartStore.Services.Catalog
         /// <param name="tierPriceId">Tier price identifier</param>
         /// <returns>Tier price</returns>
         TierPrice GetTierPriceById(int tierPriceId);
+
+		/// <summary>
+		/// Gets tier prices by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <param name="customer">Filter tier prices by customer</param>
+		/// <param name="storeId">Filter tier prices by store</param>
+		/// <returns>Map of tier prices</returns>
+		Multimap<int, TierPrice> GetTierPricesByProductIds(int[] productIds, Customer customer = null, int storeId = 0);
 
         /// <summary>
         /// Inserts a tier price
@@ -278,6 +334,13 @@ namespace SmartStore.Services.Catalog
         /// <param name="productId">The product identifier</param>
         /// <returns>Product pictures</returns>
         IList<ProductPicture> GetProductPicturesByProductId(int productId);
+
+		/// <summary>
+		/// Get product pictures by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <returns>Product pictures</returns>
+		Multimap<int, ProductPicture> GetProductPicturesByProductIds(int[] productIds);
 
         /// <summary>
         /// Gets a product picture
@@ -334,6 +397,14 @@ namespace SmartStore.Services.Catalog
 		/// <param name="showHidden">A value indicating whether to show hidden records</param>
 		/// <returns>List of bundle items</returns>
 		IList<ProductBundleItemData> GetBundleItems(int bundleProductId, bool showHidden = false);
+
+		/// <summary>
+		/// Get bundle items by product identifiers
+		/// </summary>
+		/// <param name="productIds">Product identifiers</param>
+		/// <param name="showHidden">A value indicating whether to show hidden records</param>
+		/// <returns>Map of bundle items</returns>
+		Multimap<int, ProductBundleItem> GetBundleItemsByProductIds(int[] productIds, bool showHidden = false);
 
 		#endregion
 

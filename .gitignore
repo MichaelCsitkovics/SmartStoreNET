@@ -207,10 +207,16 @@ Kopie von*
 
 # Import/Export
 /src/Presentation/SmartStore.Web/Content/files/[Ee]xport[Ii]mport/*.*
+/src/Presentation/SmartStore.Web/[Ee]xchange/*
 
 # Media
 /src/Presentation/SmartStore.Web/Media/[Tt]humbs
 /src/Presentation/SmartStore.Web/Media/[Uu]ploaded
 
+# Tools
+/src/Tools/SmartStore.WebApi.Client/packages
+/src/Tools/SmartStore.WebApi.Client/SmartStore.WebApi.Client.sln
+
 src/SmartStoreNET.Packager.sln
 Log.txt
+.vs/

@@ -15,6 +15,7 @@ using SmartStore.Core.Domain.Forums;
 using SmartStore.Core.Domain.Localization;
 using SmartStore.Core.Domain.Media;
 using SmartStore.Core.Domain.Messages;
+using SmartStore.Core.Domain.News;
 using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Security;
 using SmartStore.Core.Domain.Seo;
@@ -64,6 +65,7 @@ namespace SmartStore.Web.Controllers
         private readonly CatalogSettings _catalogSettings;
         private readonly ThemeSettings _themeSettings;
         private readonly CommonSettings _commonSettings;
+		private readonly NewsSettings _newsSettings;
         private readonly BlogSettings _blogSettings;
         private readonly ForumSettings _forumSettings;
         private readonly LocalizationSettings _localizationSettings;
@@ -93,6 +95,7 @@ namespace SmartStore.Web.Controllers
 			CatalogSettings catalogSettings,
             EmailAccountSettings emailAccountSettings,
             CommonSettings commonSettings, 
+			NewsSettings newsSettings,
 			BlogSettings blogSettings, 
 			ForumSettings forumSettings,
             LocalizationSettings localizationSettings, 
@@ -117,6 +120,7 @@ namespace SmartStore.Web.Controllers
             this._taxSettings = taxSettings;
             this._catalogSettings = catalogSettings;
             this._commonSettings = commonSettings;
+			this._newsSettings = newsSettings;
             this._blogSettings = blogSettings;
             this._forumSettings = forumSettings;
             this._localizationSettings = localizationSettings;
@@ -129,11 +133,7 @@ namespace SmartStore.Web.Controllers
 			this._pageAssetsBuilder = pageAssetsBuilder;
 			this._pictureService = pictureService;
 			this._services = services;
-
-			T = NullLocalizer.Instance;
         }
-
-		public Localizer T { get; set; }
 
         #endregion
 
@@ -648,6 +648,7 @@ namespace SmartStore.Web.Controllers
             var model = new MenuModel
             {
                 RecentlyAddedProductsEnabled = _catalogSettings.RecentlyAddedProductsEnabled,
+				NewsEnabled = _newsSettings.Enabled,
                 BlogEnabled = _blogSettings.Enabled,
                 ForumEnabled = _forumSettings.ForumsEnabled,
 				AllowPrivateMessages = _forumSettings.AllowPrivateMessages && customer.IsRegistered(),
@@ -769,6 +770,7 @@ namespace SmartStore.Web.Controllers
         /// </summary>
         /// <param name="dontUseMobileVersion">True - use desktop version; false - use version for mobile devices</param>
         /// <returns>Action result</returns>
+        [HttpPost]
         public ActionResult ChangeDevice(bool dontUseMobileVersion)
         {
 			_genericAttributeService.Value.SaveAttribute(_services.WorkContext.CurrentCustomer,
@@ -800,55 +802,54 @@ namespace SmartStore.Web.Controllers
             {
                 "/bin/",
                 "/Content/files/",
-                "/Content/files/exportimport/",
-                "/country/getstatesbycountryid",
-                "/install",
-                "/product/setreviewhelpfulness",
+                "/Content/files/ExportImport/",
+				"/Exchange/",
+                "/Country/GetStatesByCountryId",
+                "/Install",
+                "/Product/SetReviewHelpfulness",
             };
             var localizableDisallowPaths = new List<string>()
             {
-                "/boards/forumwatch",
-                "/boards/postedit",
-                "/boards/postdelete",
-                "/boards/postcreate",
-                "/boards/topicedit",
-                "/boards/topicdelete",
-                "/boards/topiccreate",
-                "/boards/topicmove",
-                "/boards/topicwatch",
-                "/cart",
-                "/checkout",
-                "/product/clearcomparelist",
-                "/compareproducts",
-                "/customer/avatar",
-                "/customer/activation",
-                "/customer/addresses",
-                "/customer/backinstocksubscriptions",
-                "/customer/changepassword",
-                "/customer/checkusernameavailability",
-                "/customer/downloadableproducts",
-                "/customer/forumsubscriptions",
-				"/customer/deleteforumsubscriptions",
-                "/customer/info",
-                "/customer/orders",
-                "/customer/returnrequests",
-                "/customer/rewardpoints",
-                "/privatemessages",
-                "/newsletter/subscriptionactivation",
-                "/onepagecheckout",
-                "/order",
-                "/passwordrecovery",
-                "/poll/vote",
-                "/privatemessages",
-                "/returnrequest",
-                "/newsletter/subscribe",
-                "/topic/authenticate",
-                "/wishlist",
-                "/product/askquestion",
-                "/product/emailafriend",
-				"/search",
-				"/config",
-				"/settings"
+                "/Boards/ForumWatch",
+                "/Boards/PostEdit",
+                "/Boards/PostDelete",
+                "/Boards/PostCreate",
+                "/Boards/TopicEdit",
+                "/Boards/TopicDelete",
+                "/Boards/TopicCreate",
+                "/Boards/TopicMove",
+                "/Boards/TopicWatch",
+                "/Cart",
+                "/Checkout",
+                "/Product/ClearCompareList",
+                "/CompareProducts",
+                "/Customer/Avatar",
+                "/Customer/Activation",
+                "/Customer/Addresses",
+                "/Customer/BackInStockSubscriptions",
+                "/Customer/ChangePassword",
+                "/Customer/CheckUsernameAvailability",
+                "/Customer/DownloadableProducts",
+                "/Customer/ForumSubscriptions",
+				"/Customer/DeleteForumSubscriptions",
+                "/Customer/Info",
+                "/Customer/Orders",
+                "/Customer/ReturnRequests",
+                "/Customer/RewardPoints",
+                "/PrivateMessages",
+                "/Newsletter/SubscriptionActivation",
+                "/Order",
+                "/PasswordRecovery",
+                "/Poll/Vote",
+                "/ReturnRequest",
+                "/Newsletter/Subscribe",
+                "/Topic/Authenticate",
+                "/Wishlist",
+                "/Product/AskQuestion",
+                "/Product/EmailAFriend",
+				"/Search",
+				"/Config",
+				"/Settings"
             };
 
 
@@ -859,7 +860,8 @@ namespace SmartStore.Web.Controllers
 			sb.AppendFormat("Sitemap: {0}", Url.RouteUrl("SitemapSEO", (object)null, _securitySettings.Value.ForceSslForAllPages ? "https" : "http"));
 			sb.AppendLine();
 
-            var disallows = disallowPaths.Concat(localizableDisallowPaths);
+			var disallows = disallowPaths.Concat(localizableDisallowPaths);
+
             if (_localizationSettings.SeoFriendlyUrlsForLanguagesEnabled)
             {
                 // URLs are localizable. Append SEO code
@@ -874,6 +876,9 @@ namespace SmartStore.Web.Controllers
             // append extra disallows
             disallows = disallows.Concat(seoSettings.ExtraRobotsDisallows.Select(x => x.Trim()));
 
+			// Append all lowercase variants (at least Google is case sensitive)
+			disallows = disallows.Concat(GetLowerCaseVariants(disallows));
+
             foreach (var disallow in disallows)
             {
                 sb.AppendFormat("Disallow: {0}", disallow);
@@ -884,6 +889,21 @@ namespace SmartStore.Web.Controllers
             Response.Write(sb.ToString());
             return null;
         }
+
+		private IEnumerable<string> GetLowerCaseVariants(IEnumerable<string> disallows)
+		{
+			var other = new List<string>();
+			foreach (var item in disallows)
+			{
+				var lower = item.ToLower();
+				if (lower != item)
+				{
+					other.Add(lower);
+				}
+			}
+
+			return other;
+		}
 
         public ActionResult GenericUrl()
         {
@@ -928,6 +948,7 @@ namespace SmartStore.Web.Controllers
             return PartialView(model);
         }
 
+        [OverrideActionFilters, OverrideAuthorization]
 		public ActionResult PdfReceiptHeader(PdfHeaderFooterVariables vars, int storeId = 0, bool isPartial = false)
 		{
 			var model = PreparePdfReceiptHeaderFooterModel(storeId);
@@ -940,6 +961,7 @@ namespace SmartStore.Web.Controllers
 			return View(model);
 		}
 
+        [OverrideActionFilters, OverrideAuthorization]
 		public ActionResult PdfReceiptFooter(PdfHeaderFooterVariables vars, int storeId = 0, bool isPartial = false)
 		{
 			var model = PreparePdfReceiptHeaderFooterModel(storeId);

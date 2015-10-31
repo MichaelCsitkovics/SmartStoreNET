@@ -5,9 +5,12 @@ using SmartStore.Admin.Models.Catalog;
 using SmartStore.Core;
 using SmartStore.Core.Domain.Catalog;
 using SmartStore.Core.Domain.Common;
+using SmartStore.Core.Domain.Customers;
+using SmartStore.Core.Infrastructure;
 using SmartStore.Core.Logging;
 using SmartStore.Services.Catalog;
-using SmartStore.Services.ExportImport;
+using SmartStore.Services.Common;
+using SmartStore.Services.DataExchange.ExportProvider;
 using SmartStore.Services.Helpers;
 using SmartStore.Services.Localization;
 using SmartStore.Services.Media;
@@ -37,7 +40,6 @@ namespace SmartStore.Admin.Controllers
         private readonly ILanguageService _languageService;
         private readonly ILocalizationService _localizationService;
         private readonly ILocalizedEntityService _localizedEntityService;
-        private readonly IExportManager _exportManager;
         private readonly IWorkContext _workContext;
         private readonly ICustomerActivityService _customerActivityService;
         private readonly IPermissionService _permissionService;
@@ -54,7 +56,7 @@ namespace SmartStore.Admin.Controllers
 			IStoreService storeService,	IStoreMappingService storeMappingService,
             IUrlRecordService urlRecordService, IPictureService pictureService,
             ILanguageService languageService, ILocalizationService localizationService, ILocalizedEntityService localizedEntityService,
-            IExportManager exportManager, IWorkContext workContext,
+            IWorkContext workContext,
             ICustomerActivityService customerActivityService, IPermissionService permissionService,
 			IDateTimeHelper dateTimeHelper,
             AdminAreaSettings adminAreaSettings, CatalogSettings catalogSettings)
@@ -70,7 +72,6 @@ namespace SmartStore.Admin.Controllers
             this._languageService = languageService;
             this._localizationService = localizationService;
             this._localizedEntityService = localizedEntityService;
-            this._exportManager = exportManager;
             this._workContext = workContext;
             this._customerActivityService = customerActivityService;
             this._permissionService = permissionService;
@@ -182,6 +183,7 @@ namespace SmartStore.Admin.Controllers
         public ActionResult AllManufacturers(string label, int selectedId)
         {
             var manufacturers = _manufacturerService.GetAllManufacturers(true);
+
             if (label.HasValue())
             {
                 manufacturers.Insert(0, new Manufacturer { Name = label, Id = 0 });
@@ -195,7 +197,39 @@ namespace SmartStore.Admin.Controllers
                            selected = m.Id == selectedId
                        };
 
-            return new JsonResult { Data = list.ToList(), JsonRequestBehavior = JsonRequestBehavior.AllowGet };
+			var data = list.ToList();
+
+			var mru = new MostRecentlyUsedList<string>(_workContext.CurrentCustomer.GetAttribute<string>(SystemCustomerAttributeNames.MostRecentlyUsedManufacturers),
+				_catalogSettings.MostRecentlyUsedManufacturersMaxSize);
+
+			// TODO: insert disabled option separator (select2 v.3.4.2 or higher required)
+			//if (mru.Count > 0)
+			//{
+			//	data.Insert(0, new
+			//	{
+			//		id = "",
+			//		text = "----------------------",
+			//		selected = false,
+			//		disabled = true
+			//	});
+			//}
+
+			for (int i = mru.Count - 1; i >= 0; --i)
+			{
+				string id = mru[i];
+				var item = manufacturers.FirstOrDefault(x => x.Id.ToString() == id);
+				if (item != null)
+				{
+					data.Insert(0, new
+					{
+						id = id,
+						text = item.Name,
+						selected = false
+					});
+				}
+			}
+
+            return new JsonResult { Data = data, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
         }
 
         public ActionResult Index()
@@ -275,6 +309,8 @@ namespace SmartStore.Admin.Controllers
                 var manufacturer = model.ToEntity();
                 manufacturer.CreatedOnUtc = DateTime.UtcNow;
                 manufacturer.UpdatedOnUtc = DateTime.UtcNow;
+
+				MediaHelper.UpdatePictureTransientStateFor(manufacturer, m => m.PictureId);
                 
 				_manufacturerService.InsertManufacturer(manufacturer);
                 
@@ -345,10 +381,9 @@ namespace SmartStore.Admin.Controllers
 
             if (ModelState.IsValid)
             {
-				int prevPictureId = manufacturer.PictureId.GetValueOrDefault();
                 manufacturer = model.ToEntity(manufacturer);
+				MediaHelper.UpdatePictureTransientStateFor(manufacturer, m => m.PictureId);
                 manufacturer.UpdatedOnUtc = DateTime.UtcNow;
-
                 _manufacturerService.UpdateManufacturer(manufacturer);
                 
 				//search engine name
@@ -357,14 +392,6 @@ namespace SmartStore.Admin.Controllers
                 
 				//locales
                 UpdateLocales(manufacturer, model);
-                
-				//delete an old picture (if deleted or updated)
-				if (prevPictureId > 0 && prevPictureId != manufacturer.PictureId.GetValueOrDefault())
-                {
-                    var prevPicture = _pictureService.GetPictureById(prevPictureId);
-                    if (prevPicture != null)
-                        _pictureService.DeletePicture(prevPicture);
-                }
                 
 				//update picture seo file name
                 UpdatePictureSeoNames(manufacturer);
@@ -411,22 +438,13 @@ namespace SmartStore.Admin.Controllers
 
         #region Export / Import
 
+		[Compress]
         public ActionResult ExportXml()
         {
             if (!_permissionService.Authorize(StandardPermissionProvider.ManageCatalog))
                 return AccessDeniedView();
 
-            try
-            {
-                var manufacturers = _manufacturerService.GetAllManufacturers(true);
-                var xml = _exportManager.ExportManufacturersToXml(manufacturers);
-                return new XmlDownloadResult(xml, "manufacturers.xml");
-            }
-            catch (Exception exc)
-            {
-                NotifyError(exc);
-                return RedirectToAction("List");
-            }
+			return Export(ExportManufacturerXmlProvider.SystemName, null);
         }
 
         #endregion
@@ -605,16 +623,16 @@ namespace SmartStore.Admin.Controllers
                     if (product != null)
                     {
                         var existingProductmanufacturers = _manufacturerService.GetProductManufacturersByManufacturerId(model.ManufacturerId, 0, int.MaxValue, true);
-                        if (existingProductmanufacturers.FindProductManufacturer(id, model.ManufacturerId) == null)
+
+						if (!existingProductmanufacturers.Any(x => x.ProductId == id && x.ManufacturerId == model.ManufacturerId))
                         {
-                            _manufacturerService.InsertProductManufacturer(
-                                new ProductManufacturer()
-                                {
-                                    ManufacturerId = model.ManufacturerId,
-                                    ProductId = id,
-                                    IsFeaturedProduct = false,
-                                    DisplayOrder = 1
-                                });
+                            _manufacturerService.InsertProductManufacturer(new ProductManufacturer
+							{
+								ManufacturerId = model.ManufacturerId,
+								ProductId = id,
+								IsFeaturedProduct = false,
+								DisplayOrder = 1
+							});
                         }
                     }
                 }

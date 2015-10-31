@@ -2,6 +2,7 @@ using System;
 using System.Configuration;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Web;
 using System.Web.Configuration;
 using SmartStore.Collections;
@@ -12,9 +13,7 @@ using SmartStore.Utilities;
 
 namespace SmartStore.Core
 {
-    /// <summary>
-    /// Represents a common helper
-    /// </summary>
+
     public partial class WebHelper : IWebHelper
     {
 		private static bool? s_optimizedCompilationsEnabled = null;
@@ -32,19 +31,11 @@ namespace SmartStore.Core
 
 		private Store _currentStore;
 
-        /// <summary>
-        /// Ctor
-        /// </summary>
-        /// <param name="httpContext">HTTP context</param>
         public WebHelper(HttpContextBase httpContext)
         {
             this._httpContext = httpContext;
         }
 
-        /// <summary>
-        /// Get URL referrer
-        /// </summary>
-        /// <returns>URL referrer</returns>
         public virtual string GetUrlReferrer()
         {
             string referrerUrl = string.Empty;
@@ -57,10 +48,6 @@ namespace SmartStore.Core
             return referrerUrl;
         }
 
-        /// <summary>
-        /// Get context IP address
-        /// </summary>
-        /// <returns>URL referrer</returns>
         public virtual string GetCurrentIpAddress()
         {
 			string result = null;
@@ -74,23 +61,12 @@ namespace SmartStore.Core
 			return result.EmptyNull();
         }
         
-        /// <summary>
-        /// Gets this page name
-        /// </summary>
-        /// <param name="includeQueryString">Value indicating whether to include query strings</param>
-        /// <returns>Page name</returns>
         public virtual string GetThisPageUrl(bool includeQueryString)
         {
             bool useSsl = IsCurrentConnectionSecured();
             return GetThisPageUrl(includeQueryString, useSsl);
         }
 
-        /// <summary>
-        /// Gets this page name
-        /// </summary>
-        /// <param name="includeQueryString">Value indicating whether to include query strings</param>
-        /// <param name="useSsl">Value indicating whether to get SSL protected page</param>
-        /// <returns>Page name</returns>
         public virtual string GetThisPageUrl(bool includeQueryString, bool useSsl)
         {
             string url = string.Empty;
@@ -126,10 +102,6 @@ namespace SmartStore.Core
             return url.ToLowerInvariant();
         }
 
-        /// <summary>
-        /// Gets a value indicating whether current connection is secured
-        /// </summary>
-        /// <returns>true - secured, false - not secured</returns>
         public virtual bool IsCurrentConnectionSecured()
         {
             if (!_isCurrentConnectionSecured.HasValue)
@@ -144,11 +116,6 @@ namespace SmartStore.Core
             return _isCurrentConnectionSecured.Value;
         }
         
-        /// <summary>
-        /// Gets server variable by name
-        /// </summary>
-        /// <param name="name">Name</param>
-        /// <returns>Server variable</returns>
         public virtual string ServerVariables(string name)
         {
             string result = string.Empty;
@@ -177,16 +144,6 @@ namespace SmartStore.Core
             return host;
         }
 
-
-        /// <summary>
-        /// Gets store host location
-        /// </summary>
-        /// <param name="useSsl">Use SSL</param>
-        /// <param name="appPathPossiblyAppended">
-        ///     <c>true</c> when the host url had to be resolved from configuration, 
-        ///     where a possible folder name may have been specified (e.g. www.mycompany.com/SHOP)
-        /// </param>
-        /// <returns>Store host location</returns>
         private string GetStoreHost(bool useSsl, out bool appPathPossiblyAppended)
         {
 			string cached = useSsl ? _storeHostSsl : _storeHost;
@@ -297,21 +254,12 @@ namespace SmartStore.Core
             return result;
         }
         
-        /// <summary>
-        /// Gets store location
-        /// </summary>
-        /// <returns>Store location</returns>
         public virtual string GetStoreLocation()
         {
             bool useSsl = IsCurrentConnectionSecured();
             return GetStoreLocation(useSsl);
         }
 
-        /// <summary>
-        /// Gets store location
-        /// </summary>
-        /// <param name="useSsl">Use SSL</param>
-        /// <returns>Store location</returns>
         public virtual string GetStoreLocation(bool useSsl)
         {
             //return HostingEnvironment.ApplicationVirtualPath;
@@ -343,22 +291,6 @@ namespace SmartStore.Core
             return result.ToLowerInvariant();
         }
         
-        /// <summary>
-        /// Returns true if the requested resource is one of the typical resources that needn't be processed by the cms engine.
-        /// </summary>
-        /// <param name="request">HTTP Request</param>
-        /// <returns>True if the request targets a static resource file.</returns>
-        /// <remarks>
-        /// These are - among others - the file extensions considered to be static resources:
-        /// .css
-        ///	.gif
-        /// .png 
-        /// .jpg
-        /// .jpeg
-        /// .js
-        /// .axd
-        /// .ashx
-        /// </remarks>
         public virtual bool IsStaticResource(HttpRequest request)
         {
 			return IsStaticResourceRequested(new HttpRequestWrapper(request));
@@ -377,23 +309,11 @@ namespace SmartStore.Core
 			return s_staticExts.IsMatch(request.Path);
 		}
         
-        /// <summary>
-        /// Maps a virtual path to a physical disk path.
-        /// </summary>
-        /// <param name="path">The path to map. E.g. "~/bin"</param>
-        /// <returns>The physical path. E.g. "c:\inetpub\wwwroot\bin"</returns>
         public virtual string MapPath(string path)
         {
 			return CommonHelper.MapPath(path, false);
         }
         
-        /// <summary>
-        /// Modifies query string
-        /// </summary>
-        /// <param name="url">Url to modify</param>
-        /// <param name="queryStringModification">Query string modification</param>
-        /// <param name="anchor">Anchor</param>
-        /// <returns>New url</returns>
         public virtual string ModifyQueryString(string url, string queryStringModification, string anchor)
         {
 			// TODO: routine should not return a query string in lowercase (unless the caller is telling him to do so).
@@ -422,12 +342,6 @@ namespace SmartStore.Core
 			return result;
         }
 
-        /// <summary>
-        /// Remove query string from url
-        /// </summary>
-        /// <param name="url">Url to modify</param>
-        /// <param name="queryString">Query string to remove</param>
-        /// <returns>New url</returns>
         public virtual string RemoveQueryString(string url, string queryString)
         {
 			var parts = url.EmptyNull().ToLower().Split(new[] { '?' });
@@ -442,12 +356,6 @@ namespace SmartStore.Core
 			return result;
         }
         
-        /// <summary>
-        /// Gets query string value by name
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="name">Parameter name</param>
-        /// <returns>Query string value</returns>
         public virtual T QueryString<T>(string name)
         {
             string queryParam = null;
@@ -460,47 +368,21 @@ namespace SmartStore.Core
             return default(T);
         }
         
-        /// <summary>
-        /// Restart application domain
-        /// </summary>
-        /// <param name="makeRedirect">A value indicating whether </param>
-        /// <param name="redirectUrl">Redirect URL; empty string if you want to redirect to the current page URL</param>
-        public virtual void RestartAppDomain(bool makeRedirect = false, string redirectUrl = "")
+        public virtual void RestartAppDomain(bool makeRedirect = false, string redirectUrl = "", bool aggressive = false)
         {
-            if (WebHelper.GetTrustLevel() > AspNetHostingPermissionLevel.Medium)
-            {
-				//full trust
-				HttpRuntime.UnloadAppDomain();
+			HttpRuntime.UnloadAppDomain();
 
-				if (!OptimizedCompilationsEnabled)
-				{
-					// not a good idea with optimized compilation!
-					TryWriteGlobalAsax();
-				}
-            }
-            else
-            {
-                //medium trust
-                bool success = TryWriteWebConfig();
-                if (!success)
-                {
-                    throw new SmartException("SmartStore.NET needs to be restarted due to a configuration change, but was unable to do so." + Environment.NewLine +
-                        "To prevent this issue in the future, a change to the web server configuration is required:" + Environment.NewLine + 
-                        "- run the application in a full trust environment, or" + Environment.NewLine +
-                        "- give the application write access to the 'web.config' file.");
-                }
+			if (aggressive)
+			{
+				TryWriteBinFolder();
+			}
+			else
+			{
+				// without this, MVC may fail resolving controllers for newly installed plugins after IIS restart
+				Thread.Sleep(250);
+			}
 
-                success = TryWriteGlobalAsax();
-                if (!success)
-                {
-                    throw new SmartException("SmartStore.NET needs to be restarted due to a configuration change, but was unable to do so." + Environment.NewLine +
-                        "To prevent this issue in the future, a change to the web server configuration is required:" + Environment.NewLine +
-                        "- run the application in a full trust environment, or" + Environment.NewLine +
-                        "- give the application write access to the 'Global.asax' file.");
-                }
-            }
-
-            // If setting up extensions/modules requires an AppDomain restart, it's very unlikely the
+            // If setting up plugins requires an AppDomain restart, it's very unlikely the
             // current request can be processed correctly.  So, we redirect to the same URL, so that the
             // new request will come to the newly started AppDomain.
             if (_httpContext != null && makeRedirect)
@@ -591,35 +473,6 @@ namespace SmartStore.Core
 				return s_optimizedCompilationsEnabled.Value;
 			}
 		}
-
-        /// <summary>
-        /// Gets a value that indicates whether the client is being redirected to a new location
-        /// </summary>
-        public virtual bool IsRequestBeingRedirected
-        {
-            get
-            {
-                var response = _httpContext.Response;
-                return response.IsRequestBeingRedirected;   
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets a value that indicates whether the client is being redirected to a new location using POST
-        /// </summary>
-        public virtual bool IsPostBeingDone
-        {
-            get
-            {
-                if (_httpContext.Items["sm.IsPOSTBeingDone"] == null)
-                    return false;
-                return Convert.ToBoolean(_httpContext.Items["sm.IsPOSTBeingDone"]);
-            }
-            set
-            {
-                _httpContext.Items["sm.IsPOSTBeingDone"] = value;
-            }
-        }
 
 		/// <summary>
 		/// Finds the trust level of the running application (http://blogs.msdn.com/dmitryr/archive/2007/01/23/finding-out-the-current-trust-level-in-asp-net.aspx)

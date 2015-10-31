@@ -18,7 +18,7 @@ using SmartStore.Core.Async;
 using SmartStore.Core.Data;
 using SmartStore.Core.Domain.Common;
 using SmartStore.Core.Domain.Customers;
-using SmartStore.Core.Domain.Discounts;
+using SmartStore.Core.Domain.Directory;
 using SmartStore.Core.Domain.Logging;
 using SmartStore.Core.Domain.Orders;
 using SmartStore.Core.Domain.Payments;
@@ -34,7 +34,6 @@ using SmartStore.Services.Directory;
 using SmartStore.Services.Messages;
 using SmartStore.Services.Orders;
 using SmartStore.Services.Payments;
-using SmartStore.Services.Stores;
 using SmartStore.Services.Tasks;
 
 namespace SmartStore.AmazonPay.Services
@@ -48,8 +47,8 @@ namespace SmartStore.AmazonPay.Services
 		private readonly IGenericAttributeService _genericAttributeService;
 		private readonly IOrderTotalCalculationService _orderTotalCalculationService;
 		private readonly ICurrencyService _currencyService;
+		private readonly CurrencySettings _currencySettings;
 		private readonly ICustomerService _customerService;
-		private readonly IStoreService _storeService;
 		private readonly IPriceFormatter _priceFormatter;
 		private readonly OrderSettings _orderSettings;
 		private readonly RewardPointsSettings _rewardPointsSettings;
@@ -67,8 +66,8 @@ namespace SmartStore.AmazonPay.Services
 			IGenericAttributeService genericAttributeService,
 			IOrderTotalCalculationService orderTotalCalculationService,
 			ICurrencyService currencyService,
+			CurrencySettings currencySettings,
 			ICustomerService customerService,
-			IStoreService storeService,
 			IPriceFormatter priceFormatter,
 			OrderSettings orderSettings,
 			RewardPointsSettings rewardPointsSettings,
@@ -85,8 +84,8 @@ namespace SmartStore.AmazonPay.Services
 			_genericAttributeService = genericAttributeService;
 			_orderTotalCalculationService = orderTotalCalculationService;
 			_currencyService = currencyService;
+			_currencySettings = currencySettings;
 			_customerService = customerService;
-			_storeService = storeService;
 			_priceFormatter = priceFormatter;
 			_orderSettings = orderSettings;
 			_rewardPointsSettings = rewardPointsSettings;
@@ -109,27 +108,27 @@ namespace SmartStore.AmazonPay.Services
 			return pluginUrl;
 		}
 
-		private decimal? GetOrderTotal()
-		{
-			decimal orderTotalDiscountAmountBase = decimal.Zero;
-			Discount orderTotalAppliedDiscount = null;
-			List<AppliedGiftCard> appliedGiftCards = null;
-			int redeemedRewardPoints = 0;
-			decimal redeemedRewardPointsAmount = decimal.Zero;
+		//private decimal? GetOrderTotal()
+		//{
+		//	decimal orderTotalDiscountAmountBase = decimal.Zero;
+		//	Discount orderTotalAppliedDiscount = null;
+		//	List<AppliedGiftCard> appliedGiftCards = null;
+		//	int redeemedRewardPoints = 0;
+		//	decimal redeemedRewardPointsAmount = decimal.Zero;
 
-			var cart = _services.WorkContext.CurrentCustomer.GetCartItems(ShoppingCartType.ShoppingCart, _services.StoreContext.CurrentStore.Id);
+		//	var cart = _services.WorkContext.CurrentCustomer.GetCartItems(ShoppingCartType.ShoppingCart, _services.StoreContext.CurrentStore.Id);
 
-			decimal? shoppingCartTotalBase = _orderTotalCalculationService.GetShoppingCartTotal(cart,
-				out orderTotalDiscountAmountBase, out orderTotalAppliedDiscount, out appliedGiftCards, out redeemedRewardPoints, out redeemedRewardPointsAmount);
+		//	decimal? shoppingCartTotalBase = _orderTotalCalculationService.GetShoppingCartTotal(cart,
+		//		out orderTotalDiscountAmountBase, out orderTotalAppliedDiscount, out appliedGiftCards, out redeemedRewardPoints, out redeemedRewardPointsAmount);
 
-			if (shoppingCartTotalBase.HasValue)		// shipping method needs to be selected here!
-			{
-				decimal shoppingCartTotal = _currencyService.ConvertFromPrimaryStoreCurrency(shoppingCartTotalBase.Value, _services.WorkContext.WorkingCurrency);
+		//	if (shoppingCartTotalBase.HasValue)		// shipping method needs to be selected here!
+		//	{
+		//		decimal shoppingCartTotal = _currencyService.ConvertFromPrimaryStoreCurrency(shoppingCartTotalBase.Value, _services.WorkContext.WorkingCurrency);
 
-				return shoppingCartTotal;
-			}
-			return null;
-		}
+		//		return shoppingCartTotal;
+		//	}
+		//	return null;
+		//}
 
 		private void SerializeOrderAttribute(AmazonPayOrderAttribute attribute, Order order)
 		{
@@ -221,7 +220,7 @@ namespace SmartStore.AmazonPay.Services
 			return isActive;
 		}
 
-		public void AddOrderNote(AmazonPaySettings settings, Order order, AmazonPayOrderNote note, string anyString = null)
+		public void AddOrderNote(AmazonPaySettings settings, Order order, AmazonPayOrderNote note, string anyString = null, bool isIpn = false)
 		{
 			try
 			{
@@ -250,7 +249,10 @@ namespace SmartStore.AmazonPay.Services
 					sb.AppendFormat("<span style=\"padding-left: 4px;\">{0}</span>", anyString);
 				}
 
-				order.OrderNotes.Add(new OrderNote()
+				if (isIpn)
+					order.HasNewPaymentNotification = true;
+
+				order.OrderNotes.Add(new OrderNote
 				{
 					Note = sb.ToString(),
 					DisplayToCustomer = false,
@@ -334,7 +336,7 @@ namespace SmartStore.AmazonPay.Services
 			if (task == null)
 				model.PollingTaskMinutes = 30;
 			else
-				model.PollingTaskMinutes = (task.Seconds / 60);
+				model.PollingTaskMinutes = 30; // (task.Seconds / 60);
 		}
 
 		public string GetWidgetUrl()
@@ -446,7 +448,7 @@ namespace SmartStore.AmazonPay.Services
 					//model.IsOrderConfirmed = state.IsOrderConfirmed;
 				}
 
-				var currency = _services.WorkContext.WorkingCurrency;
+				var currency = store.PrimaryStoreCurrency;
 				var settings = _services.Settings.LoadSetting<AmazonPaySettings>(store.Id);
 
 				model.SellerId = settings.SellerId;
@@ -527,7 +529,7 @@ namespace SmartStore.AmazonPay.Services
 					_genericAttributeService.SaveAttribute<string>(customer, SystemCustomerAttributeNames.SelectedPaymentMethod, AmazonPayCore.SystemName, store.Id);
 
 					var client = new AmazonPayClient(settings);
-					var details = _api.SetOrderReferenceDetails(client, model.OrderReferenceId, GetOrderTotal(), currency.CurrencyCode);
+					var unused = _api.SetOrderReferenceDetails(client, model.OrderReferenceId, store.PrimaryStoreCurrency.CurrencyCode, cart);
 
 					// this is ugly...
 					var paymentRequest = _httpContext.Session["OrderPaymentInfo"] as ProcessPaymentRequest;
@@ -663,7 +665,7 @@ namespace SmartStore.AmazonPay.Services
 
 				_orderService.UpdateOrder(order);
 
-				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data));
+				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data), true);
 			}
 		}
 		private void ProcessCaptureResult(AmazonPayClient client, Order order, AmazonPayApiData data)
@@ -692,7 +694,7 @@ namespace SmartStore.AmazonPay.Services
 				order.CaptureTransactionResult = newResult;
 				_orderService.UpdateOrder(order);
 
-				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data));
+				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data), true);
 			}
 		}
 		private void ProcessRefundResult(AmazonPayClient client, Order order, AmazonPayApiData data)
@@ -715,7 +717,7 @@ namespace SmartStore.AmazonPay.Services
 							_orderProcessingService.RefundOffline(order);
 
 							if (client.Settings.DataFetching == AmazonPayDataFetchingType.Polling)
-								AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data));
+								AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data), true);
 						}
 					}
 					else
@@ -725,14 +727,14 @@ namespace SmartStore.AmazonPay.Services
 							_orderProcessingService.PartiallyRefundOffline(order, refundAmount);
 
 							if (client.Settings.DataFetching == AmazonPayDataFetchingType.Polling)
-								AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data));
+								AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data), true);
 						}
 					}
 				}
 			}
 
 			if (client.Settings.DataFetching == AmazonPayDataFetchingType.Ipn)
-				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data));
+				AddOrderNote(client.Settings, order, AmazonPayOrderNote.AmazonMessageProcessed, _api.ToInfoString(data), true);
 		}
 
 		private void PollingLoop(PollingLoopData data, Func<bool> poll)
@@ -894,9 +896,9 @@ namespace SmartStore.AmazonPay.Services
 			try
 			{
 				var orderGuid = request.OrderGuid.ToString();
-				var store = _storeService.GetStoreById(request.StoreId);
+				var store = _services.StoreService.GetStoreById(request.StoreId);
 				var customer = _customerService.GetCustomerById(request.CustomerId);
-				var currency = _services.WorkContext.WorkingCurrency;
+				var currency = store.PrimaryStoreCurrency;
 				var settings = _services.Settings.LoadSetting<AmazonPaySettings>(store.Id);
 				var state = _httpContext.GetAmazonPayState(_services.Localization);
 				var client = new AmazonPayClient(settings);
@@ -964,8 +966,8 @@ namespace SmartStore.AmazonPay.Services
 			try
 			{
 				var orderGuid = request.OrderGuid.ToString();
-				var store = _storeService.GetStoreById(request.StoreId);
-				var currency = _services.WorkContext.WorkingCurrency;
+				var store = _services.StoreService.GetStoreById(request.StoreId);
+				var currency = store.PrimaryStoreCurrency;
 				var settings = _services.Settings.LoadSetting<AmazonPaySettings>(store.Id);
 				var state = _httpContext.GetAmazonPayState(_services.Localization);
 				var client = new AmazonPayClient(settings);
@@ -997,10 +999,9 @@ namespace SmartStore.AmazonPay.Services
 					state.Errors.AddRange(errors);
 				}
 
-				AsyncRunner.Run((container, x) =>
+				AsyncRunner.Run((container, ct, o) =>
 				{
-					var obj = x as AmazonPayActionState;
-
+					var obj = o as AmazonPayActionState;
 					container.Resolve<IAmazonPayService>().AddCustomerOrderNoteLoop(obj);
 				},
 				state, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
@@ -1286,7 +1287,7 @@ namespace SmartStore.AmazonPay.Services
 				_scheduleTaskService.InsertTask(new ScheduleTask
 				{
 					Name = "{0} data polling".FormatWith(AmazonPayCore.SystemName),
-					Seconds = 30 * 60,
+					CronExpression = "*/30 * * * *", // Every 30 minutes
 					Type = AmazonPayCore.DataPollingTaskType,
 					Enabled = false,
 					StopOnError = false,
@@ -1300,7 +1301,7 @@ namespace SmartStore.AmazonPay.Services
 			if (task != null)
 			{
 				task.Enabled = enabled;
-				task.Seconds = seconds;
+				//task.Seconds = seconds;
 
 				_scheduleTaskService.UpdateTask(task);
 			}

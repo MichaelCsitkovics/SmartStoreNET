@@ -40,8 +40,12 @@
                     <select name="@(controlId)" id="@(controlId)" style="width:100%"@(Html.Raw(disabled))>
                         @if (!attribute.IsRequired)
                         {
-                            <option value="0">---</option>
-                        }
+                            <option value="0">@T("Common.Unspecified")</option>
+						}
+						else if (attribute.Values.Count > 0 && !attribute.Values.Any(x => x.IsPreSelected))
+						{
+							<option value="0">@T("Common.PleaseSelect")</option>
+						}
                         @foreach (var pvaValue in attribute.Values)
                         {
                             <option value="@pvaValue.Id" @Html.Attr("selected", "selected", pvaValue.IsPreSelected) @Html.Attr("data-imageurl", pvaValue.ImageUrl, pvaValue.ImageUrl.HasValue())>@(pvaValue.Name)@(pvaValue.GetAttributeValueInfo())</option>
@@ -68,7 +72,7 @@
                                 }
 
                                 <label for="@(controlId)_@(pvaValue.Id)" class="radio @(pvaValue.ImageUrl.HasValue() ? "image-has-value" : "")">
-									<input id="@(controlId)_@(pvaValue.Id)" type="radio" name="@(controlId)" value="@pvaValue.Id" checked="@pvaValue.IsPreSelected"@(Html.Raw(disabled)) />
+									<input id="@(controlId)_@(pvaValue.Id)" type="radio" name="@(controlId)" value="@pvaValue.Id" @Html.Attr("checked", "checked", pvaValue.IsPreSelected)@(Html.Raw(disabled)) />
                                         @(pvaValue.Name)@(pvaValue.GetAttributeValueInfo())
                                 </label>
                             }
@@ -94,7 +98,7 @@
                                 }
                                 
                                 <label for="@(controlId)_@(pvaValue.Id)" class="checkbox @(pvaValue.ImageUrl.HasValue() ? "image-has-value" : "")">
-                                    <input id="@(controlId)_@(pvaValue.Id)" type="checkbox" name="@(controlId)" value="@pvaValue.Id" checked="@pvaValue.IsPreSelected" @(Html.Raw(disabled)) />
+									<input id="@(controlId)_@(pvaValue.Id)" type="checkbox" name="@(controlId)" value="@pvaValue.Id" @Html.Attr("checked", "checked", pvaValue.IsPreSelected)@(Html.Raw(disabled)) />
                                     @(pvaValue.Name)@(pvaValue.GetAttributeValueInfo())
                                 </label>
                             }
@@ -113,20 +117,20 @@
                     case AttributeControlType.Datepicker:
                         {
 							@Html.DatePickerDropDowns(controlId + "_day", controlId + "_month", controlId + "_year", attribute.BeginYear, attribute.EndYear, attribute.SelectedDay, attribute.SelectedMonth, attribute.SelectedYear, true, attribute.IsDisabled)
-                        }
-                        break;
-                    case AttributeControlType.FileUpload:
+						}
+						break;
+					case AttributeControlType.FileUpload:
 						{
 							Html.AddScriptParts("~/bundles/fileupload");
 							Html.AddCssFileParts("~/css/fileupload");
 
-                            var random = CommonHelper.GenerateRandomInteger();
-                            var clientId = "upload" + CommonHelper.GenerateRandomInteger();
+							var random = CommonHelper.GenerateRandomInteger();
+							var clientId = "upload" + CommonHelper.GenerateRandomInteger();
 
-                            //ex. ['jpg', 'jpeg', 'png', 'gif'] or []
-                            var allowedFileExtensions = string.Join("|", attribute.AllowedFileExtensions.Select(x => x.Trim()).ToList());
+							//ex. ['jpg', 'jpeg', 'png', 'gif'] or []
+							var allowedFileExtensions = string.Join("|", attribute.AllowedFileExtensions.Select(x => x.Trim()).ToList());
 
-                                    
+
                             <div id="@clientId" class="fileupload">
     
                                 <input id="@(controlId)" name="@(controlId)" type="hidden" class="hidden" />
@@ -218,7 +222,7 @@
 										<span class="color-container tooltip-toggle" title="@(pvaValue.Name)@(pvaValue.GetAttributeValueInfo())">
 											<span class="color" style="background-color:@(pvaValue.ColorSquaresRgb);">&nbsp;</span>
 										</span>
-                                        <input id="@(controlId)_@(pvaValue.Id)" type="radio" name="@(controlId)" value="@pvaValue.Id" checked="@pvaValue.IsPreSelected"@Html.Raw(disabled) />
+										<input id="@(controlId)_@(pvaValue.Id)" type="radio" name="@(controlId)" value="@pvaValue.Id" @Html.Attr("checked", "checked", pvaValue.IsPreSelected) @Html.Raw(disabled) />
                                         @*uncomment below to display attribute value name*@
                                         @*<span class="name">@(pvaValue.Name)@(pvaValue.GetAttributeValueInfo())</span>*@
                                     </label>

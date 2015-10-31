@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.ServiceModel.Syndication;
 using System.Web.Mvc;
 using SmartStore.Core;
-using SmartStore.Core.Domain;
 using SmartStore.Core.Domain.Customers;
 using SmartStore.Core.Domain.Forums;
 using SmartStore.Core.Domain.Media;
@@ -19,6 +17,7 @@ using SmartStore.Services.Media;
 using SmartStore.Services.Seo;
 using SmartStore.Web.Framework;
 using SmartStore.Web.Framework.Controllers;
+using SmartStore.Web.Framework.Mvc;
 using SmartStore.Web.Framework.Security;
 using SmartStore.Web.Models.Boards;
 
@@ -35,7 +34,6 @@ namespace SmartStore.Web.Controllers
         private readonly ICountryService _countryService;
         private readonly IWebHelper _webHelper;
         private readonly IWorkContext _workContext;
-		private readonly IStoreContext _storeContext;
         private readonly ForumSettings _forumSettings;
         private readonly CustomerSettings _customerSettings;
         private readonly MediaSettings _mediaSettings;
@@ -51,7 +49,6 @@ namespace SmartStore.Web.Controllers
             ICountryService countryService,
             IWebHelper webHelper,
             IWorkContext workContext,
-			IStoreContext storeContext,
             ForumSettings forumSettings,
             CustomerSettings customerSettings,
             MediaSettings mediaSettings,
@@ -63,7 +60,6 @@ namespace SmartStore.Web.Controllers
             this._countryService = countryService;
             this._webHelper = webHelper;
             this._workContext = workContext;
-			this._storeContext = storeContext;
             this._forumSettings = forumSettings;
             this._customerSettings = customerSettings;
             this._mediaSettings = mediaSettings;
@@ -77,7 +73,7 @@ namespace SmartStore.Web.Controllers
         [NonAction]
         protected ForumTopicRowModel PrepareForumTopicRowModel(ForumTopic topic)
         {
-            var topicModel = new ForumTopicRowModel()
+            var topicModel = new ForumTopicRowModel
             {
                 Id = topic.Id,
                 Subject = topic.Subject,
@@ -102,12 +98,12 @@ namespace SmartStore.Web.Controllers
         [NonAction]
         protected ForumRowModel PrepareForumRowModel(Forum forum)
         {
-            var forumModel = new ForumRowModel()
+            var forumModel = new ForumRowModel
             {
                 Id = forum.Id,
-                Name = forum.Name,
+                Name = forum.GetLocalized(x => x.Name),
                 SeName = forum.GetSeName(),
-                Description = forum.Description,
+                Description = forum.GetLocalized(x => x.Description),
                 NumTopics = forum.NumTopics,
                 NumPosts = forum.NumPosts,
                 LastPostId = forum.LastPostId,
@@ -118,14 +114,16 @@ namespace SmartStore.Web.Controllers
         [NonAction]
         protected ForumGroupModel PrepareForumGroupModel(ForumGroup forumGroup)
         {
-            var forumGroupModel = new ForumGroupModel()
+            var forumGroupModel = new ForumGroupModel
             {
                 Id = forumGroup.Id,
-                Name = forumGroup.Name,
-                SeName = forumGroup.GetSeName(),
-                Description = forumGroup.Description,
+                Name = forumGroup.GetLocalized(x => x.Name),
+                Description = forumGroup.GetLocalized(x => x.Description),
+				SeName = forumGroup.GetSeName()
             };
+
             var forums = _forumService.GetAllForumsByGroupId(forumGroup.Id);
+
             foreach (var forum in forums)
             {
                 var forumModel = PrepareForumRowModel(forum);
@@ -170,12 +168,12 @@ namespace SmartStore.Web.Controllers
             foreach (var fg in forumGroups)
             {
                 // Add the forum group with Value of 0 so it won't be used as a target forum
-                forumsList.Add(new SelectListItem { Text = fg.Name, Value = "0" });
+                forumsList.Add(new SelectListItem { Text = fg.GetLocalized(x => x.Name), Value = "0" });
 
                 var forums = _forumService.GetAllForumsByGroupId(fg.Id);
                 foreach (var f in forums)
                 {
-                    forumsList.Add(new SelectListItem { Text = string.Format("{0}{1}", separator, f.Name), Value = f.Id.ToString() });
+                    forumsList.Add(new SelectListItem { Text = string.Format("{0}{1}", separator, f.GetLocalized(x => x.Name)), Value = f.Id.ToString() });
                 }
             }
 
@@ -195,10 +193,11 @@ namespace SmartStore.Web.Controllers
 
             var forumGroups = _forumService.GetAllForumGroups();
 
-            var model = new BoardsIndexModel()
+            var model = new BoardsIndexModel
             {
                 CurrentTime = _dateTimeHelper.ConvertToUserTime(DateTime.UtcNow)
             };
+
             foreach (var forumGroup in forumGroups)
             {
 
@@ -222,11 +221,13 @@ namespace SmartStore.Web.Controllers
                 return Content("");
 
             var model = new ActiveDiscussionsModel();
-            foreach (var topic in topics)
+            
+			foreach (var topic in topics)
             {
                 var topicModel = PrepareForumTopicRowModel(topic);
                 model.ForumTopics.Add(topicModel);
             }
+
             model.ViewAllLinkEnabled = true;
             model.ActiveDiscussionsFeedEnabled = _forumSettings.ActiveDiscussionsFeedEnabled;
             model.PostsPageSize = _forumSettings.PostsPageSize;
@@ -245,59 +246,29 @@ namespace SmartStore.Web.Controllers
             var topics = _forumService.GetActiveTopics(forumId, topicLimit);
 
             var model = new ActiveDiscussionsModel();
+
             foreach (var topic in topics)
             {
                 var topicModel = PrepareForumTopicRowModel(topic);
                 model.ForumTopics.Add(topicModel);
             }
+
             model.ViewAllLinkEnabled = false;
             model.ActiveDiscussionsFeedEnabled = _forumSettings.ActiveDiscussionsFeedEnabled;
             model.PostsPageSize = _forumSettings.PostsPageSize;
+
             return View(model);
         }
 
+		[Compress]
         public ActionResult ActiveDiscussionsRss(int forumId = 0)
         {
             if (!_forumSettings.ForumsEnabled)
-            {
 				return HttpNotFound();
-            }
 
-            if (!_forumSettings.ActiveDiscussionsFeedEnabled)
-            {
-				return HttpNotFound();
-            }
+			var feed = _forumService.CreateActiveDiscussionsRssFeed(Url, forumId);
 
-            int topicLimit = _forumSettings.ActiveDiscussionsFeedCount;
-            var topics = _forumService.GetActiveTopics(forumId, topicLimit);
-            string url = Url.Action("ActiveDiscussionsRSS", null, (object)null, "http");
-
-            var feedTitle = _localizationService.GetResource("Forum.ActiveDiscussionsFeedTitle");
-            var feedDescription = _localizationService.GetResource("Forum.ActiveDiscussionsFeedDescription");
-
-            var feed = new SyndicationFeed(
-									string.Format(feedTitle, _storeContext.CurrentStore.Name),
-                                    feedDescription,
-                                    new Uri(url),
-                                    "ActiveDiscussionsRSS",
-                                    DateTime.UtcNow);
-
-            var items = new List<SyndicationItem>();
-
-            var viewsText = _localizationService.GetResource("Forum.Views");
-            var repliesText = _localizationService.GetResource("Forum.Replies");
-
-            foreach (var topic in topics)
-            {
-                string topicUrl = Url.RouteUrl("TopicSlug", new { id = topic.Id, slug = topic.GetSeName() }, "http");
-                string content = String.Format("{2}: {0}, {3}: {1}", topic.NumReplies.ToString(), topic.Views.ToString(), repliesText, viewsText);
-
-                items.Add(new SyndicationItem(topic.Subject, content, new Uri(topicUrl),
-                    String.Format("Topic:{0}", topic.Id), (topic.LastPostTime ?? topic.UpdatedOnUtc)));
-            }
-            feed.Items = items;
-
-            return new RssActionResult() { Feed = feed };
+            return new RssActionResult { Feed = feed };
         }
 
         public ActionResult ForumGroup(int id)
@@ -328,9 +299,9 @@ namespace SmartStore.Web.Controllers
             {
                 var model = new ForumPageModel();
                 model.Id = forum.Id;
-                model.Name = forum.Name;
+                model.Name = forum.GetLocalized(x => x.Name);
                 model.SeName = forum.GetSeName();
-                model.Description = forum.Description;
+                model.Description = forum.GetLocalized(x => x.Description);
 
                 int pageSize = 10;
                 if (_forumSettings.TopicsPageSize > 0)
@@ -347,20 +318,22 @@ namespace SmartStore.Web.Controllers
                     if (forumSubscription != null)
                     {
                         model.WatchForumText = _localizationService.GetResource("Forum.UnwatchForum");
-                        model.WatchForumSubscribed = true; // codehint: sm-add
+                        model.WatchForumSubscribed = true;
                     }
                 }
 
-                var topics = _forumService.GetAllTopics(forum.Id, 0, string.Empty, 
-                    ForumSearchType.All, 0, (page - 1), pageSize);
+                var topics = _forumService.GetAllTopics(forum.Id, 0, string.Empty, ForumSearchType.All, 0, (page - 1), pageSize);
+
                 model.TopicPageSize = topics.PageSize;
                 model.TopicTotalRecords = topics.TotalCount;
                 model.TopicPageIndex = topics.PageIndex;
+
                 foreach (var topic in topics)
                 {
                     var topicModel = PrepareForumTopicRowModel(topic);
                     model.ForumTopics.Add(topicModel);
                 }
+
                 model.IsCustomerAllowedToSubscribe = _forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer);
                 model.ForumFeedsEnabled = _forumSettings.ForumFeedsEnabled;
                 model.PostsPageSize = _forumSettings.PostsPageSize;
@@ -370,59 +343,15 @@ namespace SmartStore.Web.Controllers
             return RedirectToRoute("Boards");
         }
 
+		[Compress]
         public ActionResult ForumRss(int id)
         {
             if (!_forumSettings.ForumsEnabled)
-            {
 				return HttpNotFound();
-            }
 
-            if (!_forumSettings.ForumFeedsEnabled)
-            {
-				return HttpNotFound();
-            }
+			var feed = _forumService.CreateForumRssFeed(Url, id);
 
-            int topicLimit = _forumSettings.ForumFeedCount;
-            var forum = _forumService.GetForumById(id);
-
-            if (forum != null)
-            {
-                //Order by newest topic posts & limit the number of topics to return
-                var topics = _forumService.GetAllTopics(forum.Id, 0, string.Empty,
-                     ForumSearchType.All, 0, 0, topicLimit);
-
-                string url = Url.Action("ForumRSS", null, new { id = forum.Id }, "http");
-
-                var feedTitle = _localizationService.GetResource("Forum.ForumFeedTitle");
-                var feedDescription = _localizationService.GetResource("Forum.ForumFeedDescription");
-
-                var feed = new SyndicationFeed(
-										string.Format(feedTitle, _storeContext.CurrentStore.Name, forum.Name),
-                                        feedDescription,
-                                        new Uri(url),
-                                        string.Format("ForumRSS:{0}", forum.Id),
-                                        DateTime.UtcNow);
-
-                var items = new List<SyndicationItem>();
-
-                var viewsText = _localizationService.GetResource("Forum.Views");
-                var repliesText = _localizationService.GetResource("Forum.Replies");
-
-                foreach (var topic in topics)
-                {
-                    string topicUrl = Url.RouteUrl("TopicSlug", new { id = topic.Id, slug = topic.GetSeName() }, "http");
-                    string content = string.Format("{2}: {0}, {3}: {1}", topic.NumReplies.ToString(), topic.Views.ToString(), repliesText, viewsText);
-
-                    items.Add(new SyndicationItem(topic.Subject, content, new Uri(topicUrl), String.Format("Topic:{0}", topic.Id),
-                        (topic.LastPostTime ?? topic.UpdatedOnUtc)));
-                }
-
-                feed.Items = items;
-
-                return new RssActionResult() { Feed = feed };
-            }
-
-            return new RssActionResult() { Feed = new SyndicationFeed() };
+			return new RssActionResult { Feed = feed };
         }
 
         [HttpPost]
@@ -444,18 +373,18 @@ namespace SmartStore.Web.Controllers
                 return Json(new { Subscribed = subscribed, Text = returnText, Error = true });
             }
 
-            var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                forum.Id, 0, 0, 1).FirstOrDefault();
+            var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, forum.Id, 0, 0, 1).FirstOrDefault();
 
             if (forumSubscription == null)
             {
-                forumSubscription = new ForumSubscription()
+                forumSubscription = new ForumSubscription
                 {
                     SubscriptionGuid = Guid.NewGuid(),
                     CustomerId = _workContext.CurrentCustomer.Id,
                     ForumId = forum.Id,
                     CreatedOnUtc = DateTime.UtcNow
                 };
+
                 _forumService.InsertSubscription(forumSubscription);
                 subscribed = true;
                 returnText = unwatchTopic;
@@ -481,8 +410,8 @@ namespace SmartStore.Web.Controllers
             if (forumTopic != null)
             {
                 //load posts
-                var posts = _forumService.GetAllPosts(forumTopic.Id, 0, string.Empty,
-                    page - 1, _forumSettings.PostsPageSize);
+                var posts = _forumService.GetAllPosts(forumTopic.Id, 0, string.Empty, page - 1, _forumSettings.PostsPageSize);
+
                 // if no posts area loaded, redirect to the first page
                 if (posts.Count == 0 && page > 1)
                 {
@@ -508,19 +437,20 @@ namespace SmartStore.Web.Controllers
                 {
                     model.WatchTopicText = _localizationService.GetResource("Forum.WatchTopic");
 
-                    var forumTopicSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                        0, forumTopic.Id, 0, 1).FirstOrDefault();
+                    var forumTopicSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumTopic.Id, 0, 1).FirstOrDefault();
                     if (forumTopicSubscription != null)
                     {
                         model.WatchTopicText = _localizationService.GetResource("Forum.UnwatchTopic");
                     }
                 }
-                model.PostsPageIndex = posts.PageIndex;
+                
+				model.PostsPageIndex = posts.PageIndex;
                 model.PostsPageSize = posts.PageSize;
                 model.PostsTotalRecords = posts.TotalCount;
+
                 foreach (var post in posts)
                 {
-                    var forumPostModel = new ForumPostModel()
+                    var forumPostModel = new ForumPostModel
                     {
                         Id = post.Id,
                         ForumTopicId =  post.TopicId,
@@ -541,12 +471,14 @@ namespace SmartStore.Web.Controllers
                         SignaturesEnabled = _forumSettings.SignaturesEnabled,
                         FormattedSignature = post.Customer.GetAttribute<string>(SystemCustomerAttributeNames.Signature).FormatForumSignatureText(),
                     };
+
                     //created on string
                     if (_forumSettings.RelativeDateTimeFormattingEnabled)
                        forumPostModel.PostCreatedOnStr = post.CreatedOnUtc.RelativeFormat(true, "f");
                     else
                         forumPostModel.PostCreatedOnStr =_dateTimeHelper.ConvertToUserTime(post.CreatedOnUtc, DateTimeKind.Utc).ToString("f");
-                    //avatar
+                    
+					//avatar
                     if (_customerSettings.AllowCustomersToUploadAvatars)
                     {
                         var customer = post.Customer;
@@ -555,6 +487,7 @@ namespace SmartStore.Web.Controllers
                             avatarUrl = _pictureService.GetDefaultPictureUrl(_mediaSettings.AvatarPictureSize, PictureType.Avatar);
                         forumPostModel.CustomerAvatarUrl = avatarUrl;
                     }
+
                     //location
                     forumPostModel.ShowCustomersLocation = _customerSettings.ShowCustomersLocation;
                     if (_customerSettings.ShowCustomersLocation)
@@ -594,18 +527,18 @@ namespace SmartStore.Web.Controllers
                 return Json(new { Subscribed = subscribed, Text = returnText, Error = true });
             }
 
-            var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                0, forumTopic.Id, 0, 1).FirstOrDefault();
+            var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumTopic.Id, 0, 1).FirstOrDefault();
 
             if (forumSubscription == null)
             {
-                forumSubscription = new ForumSubscription()
+                forumSubscription = new ForumSubscription
                 {
                     SubscriptionGuid = Guid.NewGuid(),
                     CustomerId = _workContext.CurrentCustomer.Id,
                     TopicId = forumTopic.Id,
                     CreatedOnUtc = DateTime.UtcNow
                 };
+
                 _forumService.InsertSubscription(forumSubscription);
                 subscribed = true;
                 returnText = unwatchTopic;
@@ -638,6 +571,7 @@ namespace SmartStore.Web.Controllers
             model.Id = forumTopic.Id;
             model.TopicSeName = forumTopic.GetSeName();
             model.ForumSelected = forumTopic.ForumId;
+
             return View(model);
         }
 
@@ -681,6 +615,7 @@ namespace SmartStore.Web.Controllers
                 {
                     return new HttpUnauthorizedResult();
                 }
+
                 var forum = _forumService.GetForumById(forumTopic.ForumId);
 
                 _forumService.DeleteTopic(forumTopic);
@@ -717,13 +652,14 @@ namespace SmartStore.Web.Controllers
             model.Id = 0;
             model.IsEdit = false;
             model.ForumId = forum.Id;
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumSeName = forum.GetSeName();
             model.ForumEditor = _forumSettings.ForumEditor;
             model.IsCustomerAllowedToSetTopicPriority = _forumService.IsCustomerAllowedToSetTopicPriority(_workContext.CurrentCustomer);
             model.TopicPriorities = ForumTopicTypesList();
             model.IsCustomerAllowedToSubscribe = _forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer);
             model.Subscribed = false;
+
             return View(model);
         }
 
@@ -767,10 +703,8 @@ namespace SmartStore.Web.Controllers
                     }
 
                     var topicType = ForumTopicType.Normal;
-
+					var nowUtc = DateTime.UtcNow;
                     string ipAddress = _webHelper.GetCurrentIpAddress();
-
-                    var nowUtc = DateTime.UtcNow;
 
                     if (_forumService.IsCustomerAllowedToSetTopicPriority(_workContext.CurrentCustomer))
                     {
@@ -778,7 +712,7 @@ namespace SmartStore.Web.Controllers
                     }
 
                     //forum topic
-                    var forumTopic = new ForumTopic()
+                    var forumTopic = new ForumTopic
                     {
                         ForumId = forum.Id,
                         CustomerId = _workContext.CurrentCustomer.Id,
@@ -787,10 +721,11 @@ namespace SmartStore.Web.Controllers
                         CreatedOnUtc = nowUtc,
                         UpdatedOnUtc = nowUtc
                     };
+
                     _forumService.InsertTopic(forumTopic, true);
 
                     //forum post
-                    var forumPost = new ForumPost()
+                    var forumPost = new ForumPost
                     {
                         TopicId = forumTopic.Id,
                         CustomerId = _workContext.CurrentCustomer.Id,
@@ -799,6 +734,7 @@ namespace SmartStore.Web.Controllers
                         CreatedOnUtc = nowUtc,
                         UpdatedOnUtc = nowUtc
                     };
+
                     _forumService.InsertPost(forumPost, false);
 
                     //update forum topic
@@ -807,6 +743,7 @@ namespace SmartStore.Web.Controllers
                     forumTopic.LastPostCustomerId = forumPost.CustomerId;
                     forumTopic.LastPostTime = forumPost.CreatedOnUtc;
                     forumTopic.UpdatedOnUtc = nowUtc;
+
                     _forumService.UpdateTopic(forumTopic);
 
                     //subscription                
@@ -814,7 +751,7 @@ namespace SmartStore.Web.Controllers
                     {
                         if (model.Subscribed)
                         {
-                            var forumSubscription = new ForumSubscription()
+                            var forumSubscription = new ForumSubscription
                             {
                                 SubscriptionGuid = Guid.NewGuid(),
                                 CustomerId = _workContext.CurrentCustomer.Id,
@@ -838,7 +775,7 @@ namespace SmartStore.Web.Controllers
             model.TopicPriorities = ForumTopicTypesList();
             model.IsEdit = false;
             model.ForumId = forum.Id;
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumSeName = forum.GetSeName();
             model.Id = 0;
             model.IsCustomerAllowedToSetTopicPriority = _forumService.IsCustomerAllowedToSetTopicPriority(_workContext.CurrentCustomer);
@@ -873,12 +810,13 @@ namespace SmartStore.Web.Controllers
                 return RedirectToRoute("Boards");
             }
 
+			var firstPost = forumTopic.GetFirstPost(_forumService);
             var model = new EditForumTopicModel();
+
             model.IsEdit = true;
             model.TopicPriorities = ForumTopicTypesList();
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumSeName = forum.GetSeName();
-            var firstPost = forumTopic.GetFirstPost(_forumService);
             model.Text = firstPost.Text;
             model.Subject = forumTopic.Subject;
             model.TopicTypeId = forumTopic.TopicTypeId;
@@ -892,8 +830,7 @@ namespace SmartStore.Web.Controllers
             //subscription            
             if (model.IsCustomerAllowedToSubscribe)
             {
-                var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                    0, forumTopic.Id, 0, 1).FirstOrDefault();
+                var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumTopic.Id, 0, 1).FirstOrDefault();
                 model.Subscribed = forumSubscription != null;
             }
 
@@ -959,6 +896,7 @@ namespace SmartStore.Web.Controllers
                     forumTopic.TopicTypeId = (int) topicType;
                     forumTopic.Subject = subject;
                     forumTopic.UpdatedOnUtc = nowUtc;
+
                     _forumService.UpdateTopic(forumTopic);
 
                     //forum post                
@@ -987,14 +925,13 @@ namespace SmartStore.Web.Controllers
                     //subscription
                     if (_forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer))
                     {
-                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                                                                                  0, forumTopic.Id, 0, 1).FirstOrDefault
-                            ();
+                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumTopic.Id, 0, 1).FirstOrDefault();
+
                         if (model.Subscribed)
                         {
                             if (forumSubscription == null)
                             {
-                                forumSubscription = new ForumSubscription()
+                                forumSubscription = new ForumSubscription
                                 {
                                     SubscriptionGuid = Guid.NewGuid(),
                                     CustomerId = _workContext.CurrentCustomer.Id,
@@ -1026,7 +963,7 @@ namespace SmartStore.Web.Controllers
             // redisplay form
             model.TopicPriorities = ForumTopicTypesList();
             model.IsEdit = true;
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumSeName = forum.GetSeName();
             model.ForumId = forum.Id;
             model.ForumEditor = _forumSettings.ForumEditor;
@@ -1100,13 +1037,13 @@ namespace SmartStore.Web.Controllers
                 return RedirectToRoute("Boards");
             }
 
-            var model = new EditForumPostModel()
+            var model = new EditForumPostModel
             {
                 Id = 0,
                 ForumTopicId = forumTopic.Id,
                 IsEdit = false,
                 ForumEditor = _forumSettings.ForumEditor,
-                ForumName = forum.Name,
+                ForumName = forum.GetLocalized(x => x.Name),
                 ForumTopicSubject = forumTopic.Subject,
                 ForumTopicSeName = forumTopic.GetSeName(),
                 IsCustomerAllowedToSubscribe = _forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer),
@@ -1172,11 +1109,10 @@ namespace SmartStore.Web.Controllers
                     if (maxPostLength > 0 && text.Length > maxPostLength)
                         text = text.Substring(0, maxPostLength);
 
+					var nowUtc = DateTime.UtcNow;
                     string ipAddress = _webHelper.GetCurrentIpAddress();
 
-                    DateTime nowUtc = DateTime.UtcNow;
-
-                    var forumPost = new ForumPost()
+                    var forumPost = new ForumPost
                     {
                         TopicId = forumTopic.Id,
                         CustomerId = _workContext.CurrentCustomer.Id,
@@ -1185,18 +1121,18 @@ namespace SmartStore.Web.Controllers
                         CreatedOnUtc = nowUtc,
                         UpdatedOnUtc = nowUtc
                     };
+
                     _forumService.InsertPost(forumPost, true);
 
                     //subscription
                     if (_forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer))
                     {
-                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                            0, forumPost.TopicId, 0, 1).FirstOrDefault();
+                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumPost.TopicId, 0, 1).FirstOrDefault();
                         if (model.Subscribed)
                         {
                             if (forumSubscription == null)
                             {
-                                forumSubscription = new ForumSubscription()
+                                forumSubscription = new ForumSubscription
                                 {
                                     SubscriptionGuid = Guid.NewGuid(),
                                     CustomerId = _workContext.CurrentCustomer.Id,
@@ -1222,6 +1158,7 @@ namespace SmartStore.Web.Controllers
 
                     int pageIndex = (_forumService.CalculateTopicPageIndex(forumPost.TopicId, pageSize, forumPost.Id) + 1);
                     var url = string.Empty;
+
                     if (pageIndex > 1)
                     {
                         url = Url.RouteUrl("TopicSlug", new { id = forumPost.TopicId, slug = forumPost.ForumTopic.GetSeName(), page = pageIndex });
@@ -1230,6 +1167,7 @@ namespace SmartStore.Web.Controllers
                     {
                         url = Url.RouteUrl("TopicSlug", new { id = forumPost.TopicId, slug = forumPost.ForumTopic.GetSeName() });
                     }
+
                     return Redirect(string.Format("{0}#{1}", url, forumPost.Id));
                 }
                 catch (Exception ex)
@@ -1244,7 +1182,7 @@ namespace SmartStore.Web.Controllers
                 return RedirectToRoute("Boards");
 
             model.IsEdit = false;
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumTopicId = forumTopic.Id;
             model.ForumTopicSubject = forumTopic.Subject;
             model.ForumTopicSeName = forumTopic.GetSeName();
@@ -1284,13 +1222,13 @@ namespace SmartStore.Web.Controllers
             }
 
 
-            var model = new EditForumPostModel()
+            var model = new EditForumPostModel
             {
                 Id = forumPost.Id,
                 ForumTopicId = forumTopic.Id,
                 IsEdit = true,
                 ForumEditor = _forumSettings.ForumEditor,
-                ForumName = forum.Name,
+                ForumName = forum.GetLocalized(x => x.Name),
                 ForumTopicSubject = forumTopic.Subject,
                 ForumTopicSeName = forumTopic.GetSeName(),
                 IsCustomerAllowedToSubscribe = _forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer),
@@ -1301,8 +1239,7 @@ namespace SmartStore.Web.Controllers
             //subscription
             if (model.IsCustomerAllowedToSubscribe)
             {
-                var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                    0, forumTopic.Id, 0, 1).FirstOrDefault();
+                var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumTopic.Id, 0, 1).FirstOrDefault();
                 model.Subscribed = forumSubscription != null;
             }
 
@@ -1345,7 +1282,7 @@ namespace SmartStore.Web.Controllers
             {
                 try
                 {
-                    DateTime nowUtc = DateTime.UtcNow;
+                    var nowUtc = DateTime.UtcNow;
 
                     var text = model.Text;
                     var maxPostLength = _forumSettings.PostMaxLength;
@@ -1356,24 +1293,25 @@ namespace SmartStore.Web.Controllers
 
                     forumPost.UpdatedOnUtc = nowUtc;
                     forumPost.Text = text;
+
                     _forumService.UpdatePost(forumPost);
 
                     //subscription
                     if (_forumService.IsCustomerAllowedToSubscribe(_workContext.CurrentCustomer))
                     {
-                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id,
-                            0, forumPost.TopicId, 0, 1).FirstOrDefault();
+                        var forumSubscription = _forumService.GetAllSubscriptions(_workContext.CurrentCustomer.Id, 0, forumPost.TopicId, 0, 1).FirstOrDefault();
                         if (model.Subscribed)
                         {
                             if (forumSubscription == null)
                             {
-                                forumSubscription = new ForumSubscription()
+                                forumSubscription = new ForumSubscription
                                 {
                                     SubscriptionGuid = Guid.NewGuid(),
                                     CustomerId = _workContext.CurrentCustomer.Id,
                                     TopicId = forumPost.TopicId,
                                     CreatedOnUtc = nowUtc
                                 };
+
                                 _forumService.InsertSubscription(forumSubscription);
                             }
                         }
@@ -1393,6 +1331,7 @@ namespace SmartStore.Web.Controllers
                     }
                     int pageIndex = (_forumService.CalculateTopicPageIndex(forumPost.TopicId, pageSize, forumPost.Id) + 1);
                     var url = string.Empty;
+
                     if (pageIndex > 1)
                     {
                         url = Url.RouteUrl("TopicSlug", new { id = forumPost.TopicId, slug = forumPost.ForumTopic.GetSeName(), page = pageIndex });
@@ -1401,6 +1340,7 @@ namespace SmartStore.Web.Controllers
                     {
                         url = Url.RouteUrl("TopicSlug", new { id = forumPost.TopicId, slug = forumPost.ForumTopic.GetSeName() });
                     }
+
                     return Redirect(string.Format("{0}#{1}", url, forumPost.Id));
                 }
                 catch (Exception ex)
@@ -1411,7 +1351,7 @@ namespace SmartStore.Web.Controllers
 
             //redisplay form
             model.IsEdit = true;
-            model.ForumName = forum.Name;
+            model.ForumName = forum.GetLocalized(x => x.Name);
             model.ForumTopicId = forumTopic.Id;
             model.ForumTopicSubject = forumTopic.Subject;
             model.ForumTopicSeName = forumTopic.GetSeName();
@@ -1422,8 +1362,7 @@ namespace SmartStore.Web.Controllers
             return View(model);
         }
 
-        public ActionResult Search(string searchterms, bool? adv, string forumId,
-            string within, string limitDays, int page = 1)
+        public ActionResult Search(string searchterms, bool? adv, string forumId, string within, string limitDays, int page = 1)
         {
             if (!_forumSettings.ForumsEnabled)
             {
@@ -1436,98 +1375,99 @@ namespace SmartStore.Web.Controllers
 
             // Create the values for the "Limit results to previous" select list
             var limitList = new List<SelectListItem>
-                            {
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.AllResults"),
-                                    Value = "0"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1day"),
-                                    Value = "1"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.7days"),
-                                    Value = "7"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.2weeks"),
-                                    Value = "14"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1month"),
-                                    Value = "30"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.3months"),
-                                    Value = "92"
-                                },
-                                new SelectListItem
-                                {
-                                    Text= _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.6months"),
-                                    Value = "183"
-                                },
-                                new SelectListItem
-                                {
-                                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1year"),
-                                    Value = "365"
-                                }
-                            };
+            {
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.AllResults"),
+                    Value = "0"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1day"),
+                    Value = "1"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.7days"),
+                    Value = "7"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.2weeks"),
+                    Value = "14"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1month"),
+                    Value = "30"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.3months"),
+                    Value = "92"
+                },
+                new SelectListItem
+                {
+                    Text= _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.6months"),
+                    Value = "183"
+                },
+                new SelectListItem
+                {
+                    Text = _localizationService.GetResource("Forum.Search.LimitResultsToPrevious.1year"),
+                    Value = "365"
+                }
+            };
+
             model.LimitList = limitList;
 
             // Create the values for the "Search in forum" select list
             var forumsSelectList = new List<SelectListItem>();
-            forumsSelectList.Add(
-                new SelectListItem
-                {
-                    Text = _localizationService.GetResource("Forum.Search.SearchInForum.All"),
-                    Value = "0",
-                    Selected = true,
-                });
+            forumsSelectList.Add(new SelectListItem
+            {
+                Text = _localizationService.GetResource("Forum.Search.SearchInForum.All"),
+                Value = "0",
+                Selected = true,
+            });
+
             var separator = "--";
             var forumGroups = _forumService.GetAllForumGroups();
             foreach (var fg in forumGroups)
             {
                 // Add the forum group with value as '-' so it can't be used as a target forum id
-                forumsSelectList.Add(new SelectListItem { Text = fg.Name, Value = "-" });
+                forumsSelectList.Add(new SelectListItem { Text = fg.GetLocalized(x => x.Name), Value = "-" });
 
                 var forums = _forumService.GetAllForumsByGroupId(fg.Id);
                 foreach (var f in forums)
                 {
-                    forumsSelectList.Add(
-                        new SelectListItem
-                        {
-                            Text = string.Format("{0}{1}", separator, f.Name),
-                            Value = f.Id.ToString()
-                        });
+                    forumsSelectList.Add(new SelectListItem
+                    {
+                        Text = string.Format("{0}{1}", separator, f.GetLocalized(x => x.Name)),
+                        Value = f.Id.ToString()
+                    });
                 }
             }
             model.ForumList = forumsSelectList;
 
             // Create the values for "Search within" select list            
             var withinList = new List<SelectListItem>
-                                {
-                                    new SelectListItem
-                                    {
-                                        Value = ((int)ForumSearchType.All).ToString(),
-                                        Text = _localizationService.GetResource("Forum.Search.SearchWithin.All")
-                                    },
-                                    new SelectListItem
-                                    {
-                                        Value = ((int)ForumSearchType.TopicTitlesOnly).ToString(),
-                                        Text = _localizationService.GetResource("Forum.Search.SearchWithin.TopicTitlesOnly")
-                                    },
-                                    new SelectListItem
-                                    {
-                                        Value = ((int)ForumSearchType.PostTextOnly).ToString(),
-                                        Text = _localizationService.GetResource("Forum.Search.SearchWithin.PostTextOnly")
-                                    }
-                                };
+            {
+                new SelectListItem
+                {
+                    Value = ((int)ForumSearchType.All).ToString(),
+                    Text = _localizationService.GetResource("Forum.Search.SearchWithin.All")
+                },
+                new SelectListItem
+                {
+                    Value = ((int)ForumSearchType.TopicTitlesOnly).ToString(),
+                    Text = _localizationService.GetResource("Forum.Search.SearchWithin.TopicTitlesOnly")
+                },
+                new SelectListItem
+                {
+                    Value = ((int)ForumSearchType.PostTextOnly).ToString(),
+                    Text = _localizationService.GetResource("Forum.Search.SearchWithin.PostTextOnly")
+                }
+            };
+
             model.WithinList = withinList;
 
             int forumIdSelected;
@@ -1558,8 +1498,7 @@ namespace SmartStore.Web.Controllers
 
                     if (searchterms.Length < searchTermMinimumLength)
                     {
-                        throw new SmartException(string.Format(_localizationService.GetResource("Forum.SearchTermMinimumLengthIsNCharacters"),
-                            searchTermMinimumLength));
+                        throw new SmartException(string.Format(_localizationService.GetResource("Forum.SearchTermMinimumLengthIsNCharacters"), searchTermMinimumLength));
                     }
 
                     ForumSearchType searchWithin = 0;
@@ -1575,11 +1514,12 @@ namespace SmartStore.Web.Controllers
                         pageSize = _forumSettings.SearchResultsPageSize;
                     }
 
-                    var topics = _forumService.GetAllTopics(forumIdSelected, 0, searchterms, searchWithin,
-                        limitResultsToPrevious, page - 1, pageSize);
+                    var topics = _forumService.GetAllTopics(forumIdSelected, 0, searchterms, searchWithin, limitResultsToPrevious, page - 1, pageSize);
+
                     model.TopicPageSize = topics.PageSize;
                     model.TopicTotalRecords = topics.TotalCount;
                     model.TopicPageIndex = topics.PageIndex;
+
                     foreach (var topic in topics)
                     {
                         var topicModel = PrepareForumTopicRowModel(topic);
@@ -1656,7 +1596,7 @@ namespace SmartStore.Web.Controllers
             if (forum != null)
             {
                 model.ForumId = forum.Id;
-                model.ForumName = forum.Name;
+                model.ForumName = forum.GetLocalized(x => x.Name);
                 model.ForumSeName = forum.GetSeName();
             }
 
@@ -1664,7 +1604,7 @@ namespace SmartStore.Web.Controllers
             if (forumGroup != null)
             {
                 model.ForumGroupId = forumGroup.Id;
-                model.ForumGroupName = forumGroup.Name;
+                model.ForumGroupName = forumGroup.GetLocalized(x => x.Name);
                 model.ForumGroupSeName = forumGroup.GetSeName();
             }
 
@@ -1673,5 +1613,4 @@ namespace SmartStore.Web.Controllers
 
         #endregion
     }
-
 }

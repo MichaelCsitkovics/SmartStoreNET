@@ -1,6 +1,5 @@
 ﻿@using Telerik.Web.Mvc.UI
 @{
-    //page title
 	ViewBag.Title = T("Admin.Common.Stores").Text;
 }
 <div class="section-header">
@@ -24,23 +23,19 @@
 							.ClientTemplate("<a href=\"Edit/<#= Id #>\"><#= Name #></a>");
 						columns.Bound(x => x.Url)
 							.ClientTemplate("<a href=\"<#= Url #>\" target=\"_blank\"><#= Url #></a>");
+						columns.Bound(x => x.Hosts)
+							.Encoded(false);
+						columns.Bound(x => x.PrimaryStoreCurrencyName);
+						columns.Bound(x => x.PrimaryExchangeRateCurrencyName);
 						columns.Bound(x => x.ContentDeliveryNetwork)
 							.ClientTemplate("<a href=\"<#= ContentDeliveryNetwork #>\" target=\"_blank\"><#= ContentDeliveryNetwork #></a>");
-						columns.Bound(x => x.Hosts);
 						columns.Bound(x => x.SslEnabled)
 							.Template(item => @Html.SymbolForBool(item.SslEnabled))
 							.ClientTemplate(@Html.SymbolForBool("SslEnabled"))
-							.Width(100)
-							.Centered();
+							.Centered()
+							.Width(80);
 						columns.Bound(x => x.DisplayOrder)
-							.Width(100)
 							.Centered();
-                        columns.Bound(x => x.Id)
-                            .Template(x => Html.ActionLink(T("Admin.Common.Edit").Text, "Edit", new { id = x.Id }))
-                            .ClientTemplate("<a href=\"Edit/<#= Id #>\">" + T("Admin.Common.Edit").Text + "</a>")
-                            .Width(100)
-                            .Centered()
-                            .HeaderTemplate(T("Admin.Common.Edit").Text);
                     })
                     .DataBinding(dataBinding => dataBinding.Ajax().Select("List", "Store"))
                     .EnableCustomBinding(true))
